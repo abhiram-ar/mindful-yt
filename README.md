@@ -22,7 +22,22 @@ without warranty.
 
 ## Install
 
-Needs [Go](https://go.dev/dl/).
+**macOS and Linux**, in a terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/abhiram-ar/youtube-downloader-via-dns-over-http/main/install.sh | sh
+```
+
+**Windows**, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/abhiram-ar/youtube-downloader-via-dns-over-http/main/install.ps1 | iex
+```
+
+Both download the latest release for your system, check it against the
+published checksums, and install ytget. Run them again to update.
+
+With Go installed, this works too:
 
 ```sh
 go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@latest

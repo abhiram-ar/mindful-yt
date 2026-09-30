@@ -7,7 +7,12 @@ and Bubble Tea v2, on Windows, macOS and Linux.
 
 ## Before pushing
 
-Anything on `main` ships: users install with `go install ...@latest`.
+Users install with `install.sh` / `install.ps1`, which are served straight
+from `main`, so changes to them ship on push. Binaries ship when a `v*` tag
+is pushed: `.github/workflows/release.yml` runs GoReleaser
+(`.goreleaser.yaml`). The scripts rely on the release file names having no
+version in them (`ytget_<os>_<arch>.tar.gz`, `.zip` on Windows, plus
+`checksums.txt`). `go install ...@latest` builds the head of `main`.
 
 ```sh
 gofmt -l .      # must print nothing

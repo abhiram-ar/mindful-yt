@@ -1,0 +1,35 @@
+# Builds ytget for Windows, macOS and Linux and publishes a GitHub release.
+# Runs from .github/workflows/release.yml when a v* tag is pushed.
+# Try it locally with: goreleaser release --snapshot --clean
+version: 2
+
+project_name: ytget
+
+builds:
+  - main: ./cmd/ytget
+    binary: ytget
+    env:
+      - CGO_ENABLED=0
+    goos: [windows, darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # No version in the names, so releases/latest/download/<name> always
+    # points at the newest build. install.sh and install.ps1 rely on it.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
