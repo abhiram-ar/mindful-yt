@@ -1,19 +1,20 @@
 ## ytget
 
-Download a single YouTube video while YouTube stays blocked in your hosts file,
-on Windows, macOS or Linux. yt-dlp runs through a private local proxy that
-looks YouTube up over DNS-over-HTTPS, so nothing else on your machine gets past
-the block.
+Download a single YouTube video when YouTube's DNS is blocked, on Windows,
+macOS or Linux. ytget runs yt-dlp through a private local proxy that looks
+YouTube up over DNS-over-HTTPS, so nothing else on your machine can reach
+youtube.com.
 
 Single videos only, a daily limit, and a reason for every download.
 
 ## Disclaimer - AI-led project
 
-This is personal software built to solve a problem of my own. 
-I kept losing hours to YouTube, so I blocked it in my OS DNS resolver (poiting youtube.com -> 0.0.0.0). 
-But friends and articles I read, recommend videos that are worth watching. 
-ytget solves this: it downloads only the one video I ask for and leaves the block in place, 
-so I can watch what matters without getting pulled back into the feed.
+This is personal software, built to solve a problem of my own. I kept losing
+hours to YouTube, so I blocked it in my OS's DNS resolver (pointing
+youtube.com to 0.0.0.0). But friends, and articles I read, still recommend
+videos worth watching. ytget solves this: it downloads only the one video I ask
+for and leaves the block in place, so I can watch what matters without getting
+pulled back into the feed.
 
 If you're in the same spot, or you just want a YouTube downloader that works
 even when YouTube is blocked, you're welcome to use it. It's provided as is,
@@ -38,7 +39,7 @@ irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 ```
 
 > Both download the latest release for your system, check it against the
-published checksums, and install ytget. Run them again to update.
+> published checksums, and install ytget. Run them again to update.
 
 <br/>
 

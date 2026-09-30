@@ -39,6 +39,12 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
 
 ## Rules
 
+- **Follow the standard Go project layout.**
+  - The command's entry point is `cmd/ytget/`. All other code goes in
+    `internal/<package>/`: extend the package that owns the concern, or add a
+    new one. No Go code at the repo root.
+  - Tests go next to the code, in `_test.go` files.
+  - OS-specific code uses `_windows.go` files or `//go:build unix`.
 - **YouTube is blocked on the dev machine.** Reach it only through the proxy,
   as `liveSetup` in `internal/ytdlp/live_test.go` does. Never edit the hosts
   file.
