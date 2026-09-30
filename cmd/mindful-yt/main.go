@@ -53,6 +53,7 @@ the hosts file. Single videos only, with a daily limit.
 Usage:
   mindful-yt [link] [-q RES] [-r REASON]
   mindful-yt --history | --check | --update | --version
+  mindful-yt lock-me-in
 
   link           a single YouTube video; asked for if left out
   -q, --quality  resolution: 144, 240, 360, 480, 720, 1080, 1440 or 2160
@@ -63,6 +64,8 @@ Usage:
                  ffmpeg, and offer to install whatever is missing
   --update       update yt-dlp (fixes most sudden breakages)
   --version      print mindful-yt's version
+  lock-me-in     block YouTube in this machine's hosts file (mindful-yt
+                 still downloads)
 
 Settings and history: %s
 yt-dlp:               %s
@@ -71,6 +74,9 @@ yt-dlp:               %s
 func main() { os.Exit(run(os.Args[1:])) }
 
 func run(argv []string) int {
+	if len(argv) > 0 && argv[0] == "lock-me-in" {
+		return lockMeIn(argv[1:])
+	}
 	var opts tui.Options
 	var qualityText string
 	var showHistory, update, showVersion bool

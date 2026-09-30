@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -214,7 +215,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spin, cmd = m.spin.Update(msg)
 		return m, cmd
 	case tea.KeyPressMsg:
-		if msg.String() == "ctrl+c" {
+		if key.Matches(msg, keyInterrupt) {
 			return m.quit("Cancelled.", 130)
 		}
 		return m.handleKey(msg)
@@ -256,76 +257,75 @@ func (m model) updateInputs(msg tea.Msg) (model, tea.Cmd) {
 }
 
 func (m model) handleKey(msg tea.KeyPressMsg) (model, tea.Cmd) {
-	key := msg.String()
 	switch m.stage {
 	case stageLink:
-		switch key {
-		case "enter":
+		switch {
+		case key.Matches(msg, keyContinue):
 			return m.acceptLink(m.link.Value())
-		case "esc":
+		case key.Matches(msg, keyQuitTyping):
 			return m.quit("", 0)
 		}
 		m.problem = ""
 		return m.updateInputs(msg)
 
 	case stageSaved:
-		switch key {
-		case "up", "k":
+		switch {
+		case key.Matches(msg, keyUp):
 			m.cursor = max(0, m.cursor-1)
-		case "down", "j":
+		case key.Matches(msg, keyDown):
 			m.cursor = min(len(m.saved), m.cursor+1)
-		case "enter":
+		case key.Matches(msg, keySelect):
 			if m.cursor < len(m.saved) {
 				return m.play(m.saved[m.cursor].File, "Opened "+m.saved[m.cursor].File)
 			}
 			return m.startDownloadFlow()
-		case "esc", "q":
+		case key.Matches(msg, keyQuit):
 			return m.quit("", 0)
 		}
 
 	case stageDeps:
-		switch key {
-		case "enter":
+		switch {
+		case key.Matches(msg, keyInstall):
 			m.queue, m.triedInstall = m.missing, true
 			return m.installNext()
-		case "esc", "q":
+		case key.Matches(msg, keyQuit):
 			return m.quit(bad.Render("mindful-yt can't download without these."), 1)
 		}
 
 	case stagePick:
-		switch key {
-		case "up", "k":
+		switch {
+		case key.Matches(msg, keyUp):
 			m.cursor = max(0, m.cursor-1)
-		case "down", "j":
+		case key.Matches(msg, keyDown):
 			m.cursor = min(len(m.qualities)-1, m.cursor+1)
-		case "enter":
+		case key.Matches(msg, keySelect):
 			return m.chooseQuality(m.qualities[m.cursor].Res)
-		case "esc", "q":
+		case key.Matches(msg, keyQuit):
 			return m.quit("", 0)
 		}
 
 	case stageReason:
-		switch key {
-		case "enter":
+		switch {
+		case key.Matches(msg, keyStart):
 			return m.acceptReason(m.reason.Value())
-		case "esc":
+		case key.Matches(msg, keyQuitTyping):
 			return m.quit("", 0)
 		}
 		m.problem = ""
 		return m.updateInputs(msg)
 
 	case stageBusy, stageInstalling, stageDownloading:
-		if key == "esc" {
+		if key.Matches(msg, keyCancel) {
 			return m.quit("Cancelled.", 130)
 		}
 
 	case stageDone:
-		switch key {
-		case "enter", "p":
+		switch {
+		case key.Matches(msg, keyPlay):
 			return m.play(m.logged.File, m.savedLine())
-		case "o":
+		case key.Matches(msg, keyOpen):
 			return m.play(filepath.Dir(m.logged.File), m.savedLine())
-		case "esc", "q":
+		case key.Matches(msg, keyQuitDone):
 			return m.quit(m.savedLine(), 0)
 		}
 	}

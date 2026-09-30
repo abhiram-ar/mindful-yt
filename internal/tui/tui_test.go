@@ -186,6 +186,33 @@ func TestShortReasonIsRefused(t *testing.T) {
 	}
 }
 
+func TestHelpLineListsEachScreensKeys(t *testing.T) {
+	m := newModel(testApp(t, store.DefaultConfig, nil), Options{})
+	for _, c := range []struct {
+		stage stage
+		want  string
+	}{
+		{stageLink, "enter continue · esc quit"},
+		{stagePick, "↑/↓ choose · enter select · esc quit"},
+		{stageDeps, "enter install · esc quit"},
+		{stageReason, "enter start download · esc quit"},
+		{stageDownloading, "esc cancel"},
+		{stageDone, "enter play · o open folder · q quit"},
+	} {
+		m.stage = c.stage
+		m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+		if view := ansi.Strip(m.View().Content); !strings.Contains(view, c.want) {
+			t.Errorf("stage %v: no %q in\n%s", c.stage, c.want, view)
+		}
+		m = update(m, tea.WindowSizeMsg{Width: 30, Height: 30})
+		help := ansi.Strip(m.View().Content)
+		help = help[strings.LastIndex(strings.TrimSuffix(help, "\n"), "\n")+1:]
+		if w := ansi.StringWidth(strings.TrimSuffix(help, "\n")); w > 29 || !strings.HasPrefix(help, c.want[:3]) {
+			t.Errorf("stage %v: help line %q is %d columns in a 30-column terminal", c.stage, help, w)
+		}
+	}
+}
+
 func TestFinishedDownloadIsLogged(t *testing.T) {
 	app := testApp(t, store.DefaultConfig, nil)
 	m := newModel(app, Options{})

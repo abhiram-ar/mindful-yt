@@ -61,6 +61,14 @@ mindful-yt "https://youtu.be/dQw4w9WgXcQ"
 
 > mindful-yt offers to install yt-dlp, Deno and ffmpeg if they're missing.
 
+<br/>
+
+YouTube not blocked yet? This blocks it in your OS's hosts file but mindful-yt keeps working:
+
+```sh
+mindful-yt lock-me-in
+```
+
 
 ## Settings
 

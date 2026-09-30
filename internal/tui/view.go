@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -46,9 +47,9 @@ func (m model) View() tea.View {
 			if q := cmp.Or(e.Height, e.Quality); q > 0 { // what arrived, else what was asked for
 				label = fmt.Sprintf("%dp, %s", q, label)
 			}
-			b.WriteString(m.choice(i, "Play it ("+label+")") + "\n")
+			b.WriteString(choiceRow(m.cursor, i, "Play it ("+label+")") + "\n")
 		}
-		b.WriteString(m.choice(len(m.saved), "Download another resolution (counts toward today's limit)") + "\n")
+		b.WriteString(choiceRow(m.cursor, len(m.saved), "Download another resolution (counts toward today's limit)") + "\n")
 
 	case stageBusy:
 		b.WriteString(m.spin.View() + " " + m.busyLabel + "\n")
@@ -80,7 +81,7 @@ func (m model) View() tea.View {
 			if q.Size > 0 {
 				label += faint.Render("  about " + human.Bytes(q.Size))
 			}
-			b.WriteString(m.choice(i, label) + "\n")
+			b.WriteString(choiceRow(m.cursor, i, label) + "\n")
 		}
 
 	case stageReason:
@@ -104,8 +105,8 @@ func (m model) View() tea.View {
 	if m.problem != "" {
 		b.WriteString("\n" + bad.Render(m.problem) + "\n")
 	}
-	if help := m.help(); help != "" {
-		b.WriteString("\n" + faint.Render(help) + "\n")
+	if keys := m.bindings(); len(keys) > 0 {
+		b.WriteString("\n" + helpLine(m.lineWidth(), keys...) + "\n")
 	}
 	v := tea.NewView(b.String())
 	if m.taskbar {
@@ -197,14 +198,17 @@ func pad(s string, width int) string {
 	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
 }
 
-// lineWidth is how wide a line may be. One column stays spare, so a terminal
-// that shrinks by a column doesn't wrap the frame.
-func (m model) lineWidth() int {
-	if m.width <= 0 {
+// lineWidthFor is how wide a line may be in a terminal termWidth columns
+// wide. One column stays spare, so a terminal that shrinks by a column doesn't
+// wrap the frame.
+func lineWidthFor(termWidth int) int {
+	if termWidth <= 0 {
 		return 79 // before the first WindowSizeMsg
 	}
-	return max(20, m.width-1)
+	return max(20, termWidth-1)
 }
+
+func (m model) lineWidth() int { return lineWidthFor(m.width) }
 
 // fit shortens s to one line.
 func (m model) fit(s string) string { return ansi.Truncate(s, m.lineWidth(), "…") }
@@ -214,8 +218,9 @@ func (m model) videoHeader() string {
 		faint.Render(m.fit(m.info.ChannelName()+" · "+human.Duration(m.info.Duration))) + "\n\n"
 }
 
-func (m model) choice(i int, label string) string {
-	if i == m.cursor {
+// choiceRow is row i of a list to pick from, marked when the cursor is on it.
+func choiceRow(cursor, i int, label string) string {
+	if i == cursor {
 		return accent.Render("› ") + label
 	}
 	return "  " + label
@@ -227,22 +232,23 @@ func (m model) savedLine() string {
 		faint.Render(fmt.Sprintf("%dp · %d/%d downloads today", e.Height, m.usedToday(), m.app.Config.DailyLimit))
 }
 
-func (m model) help() string {
+// bindings are the keys the help line lists for the current screen.
+func (m model) bindings() []key.Binding {
 	switch m.stage {
 	case stageLink:
-		return "enter continue · esc quit"
+		return []key.Binding{keyContinue, keyQuitTyping}
 	case stageSaved, stagePick:
-		return "↑/↓ choose · enter select · esc quit"
+		return []key.Binding{keyChoose, keySelect, keyQuit}
 	case stageDeps:
-		return "enter install · esc quit"
+		return []key.Binding{keyInstall, keyQuit}
 	case stageReason:
-		return "enter start download · esc quit"
+		return []key.Binding{keyStart, keyQuitTyping}
 	case stageBusy, stageInstalling, stageDownloading:
-		return "esc cancel"
+		return []key.Binding{keyCancel}
 	case stageDone:
-		return "enter play · o open folder · q quit"
+		return []key.Binding{keyPlay, keyOpen, keyQuitDone}
 	}
-	return ""
+	return nil
 }
 
 func fraction(done, total float64) float64 {

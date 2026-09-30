@@ -47,7 +47,9 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
   - OS-specific code uses `_windows.go` files or `//go:build unix`.
 - **YouTube is blocked on the dev machine.** Reach it only through the proxy,
   as `liveSetup` in `internal/ytdlp/live_test.go` does. Never edit the hosts
-  file.
+  file, and never run `lock-me-in` there: it reads or writes the real one
+  (`--write-hosts` writes without asking). `internal/hosts` tests use temp
+  files, and the lock-me-in TUI tests replace `apply` and `verify`.
 - **Don't touch the user's real data.** Their settings and history
   (`store.Dirs`) drive the daily limit. Set `MINDFUL_YT_HOME` to a temp folder
   before running the binary; only `--version` is safe without it. Every other
