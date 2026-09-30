@@ -1,5 +1,3 @@
-// Package platform holds the Windows-specific pieces: opening files,
-// re-reading PATH after an install, and stopping process trees.
 package platform
 
 import (
@@ -53,6 +51,9 @@ func RefreshPath() {
 	parts = append(parts, os.Getenv("PATH"))
 	os.Setenv("PATH", strings.Join(parts, string(os.PathListSeparator)))
 }
+
+// NewProcessGroup does nothing on Windows; KillTree finds the children itself.
+func NewProcessGroup(cmd *exec.Cmd) {}
 
 // KillTree stops a process and everything it started.
 func KillTree(pid int) error {

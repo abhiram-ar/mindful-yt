@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"os/signal"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/term"
@@ -24,6 +26,7 @@ import (
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/proxy"
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/tui"
+	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
 )
 
 var qualities = []int{144, 240, 360, 480, 720, 1080, 1440, 2160}
@@ -40,8 +43,8 @@ Usage:
                  (skips the picker; you get the best up to that)
   -r, --reason   why you're watching it (skips the question)
   --history      today's count and recent downloads
-  --check        check for yt-dlp, Node.js and ffmpeg, and offer to install
-                 whatever is missing
+  --check        check for yt-dlp, a JavaScript runtime (Deno or Node.js) and
+                 ffmpeg, and offer to install whatever is missing
   --update       update yt-dlp (fixes most sudden breakages)
 
 Settings and history: %s
@@ -57,7 +60,7 @@ func run(argv []string) int {
 		return 1
 	}
 	st := store.Store{Dir: dataDir}
-	ytdlpPath := filepath.Join(toolsDir, "yt-dlp.exe")
+	ytdlpPath := deps.YtdlpPath(toolsDir)
 
 	var opts tui.Options
 	var qualityText string
@@ -87,7 +90,7 @@ func run(argv []string) int {
 		positional, argv = append(positional, argv[0]), argv[1:]
 	}
 	if len(positional) > 1 {
-		fmt.Fprintln(os.Stderr, "One link at a time. (In PowerShell, put quotes around links.)")
+		fmt.Fprintln(os.Stderr, "One link at a time. (Put quotes around links.)")
 		return 2
 	}
 	if len(positional) == 1 {
@@ -133,13 +136,15 @@ func run(argv []string) int {
 		return 1
 	}
 	defer p.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	// A closed terminal (SIGHUP) cancels everything, like quitting does.
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGHUP)
 	defer cancel()
 
 	code, err := tui.Run(&tui.App{
-		Ctx: ctx, Store: st, Config: cfg, Entries: entries, Ytdlp: ytdlpPath, ProxyURL: p.URL(),
+		Ctx: ctx, Store: st, Config: cfg, Entries: entries, Tools: toolsDir, ProxyURL: p.URL(),
 	}, opts)
-	cancel() // stops a download that's still running
+	cancel()                     // stops a yt-dlp that's still running...
+	ytdlp.Wait(10 * time.Second) // ...and waits until it has, so none is left behind
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

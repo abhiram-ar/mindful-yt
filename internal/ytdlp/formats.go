@@ -22,6 +22,16 @@ func (v VideoInfo) ChannelName() string {
 	return v.Uploader
 }
 
+// Format returns the format with the given id.
+func (v VideoInfo) Format(id string) (Format, bool) {
+	for _, f := range v.Formats {
+		if f.ID == id {
+			return f, true
+		}
+	}
+	return Format{}, false
+}
+
 // Format is one of the streams YouTube offers for a video.
 type Format struct {
 	ID             string  `json:"format_id"`
@@ -36,19 +46,20 @@ type Format struct {
 	FilesizeApprox float64 `json:"filesize_approx"`
 }
 
-func (f Format) size() float64 {
+// Size is the format's size in bytes, exact or estimated; 0 if unknown.
+func (f Format) Size() float64 {
 	if f.Filesize > 0 {
 		return f.Filesize
 	}
 	return f.FilesizeApprox
 }
 
-func (f Format) hasVideo() bool { return f.VCodec != "none" && f.Height > 0 && f.Ext != "mhtml" }
-func (f Format) hasAudio() bool { return f.ACodec != "none" && f.ACodec != "" }
+func (f Format) HasVideo() bool { return f.VCodec != "none" && f.Height > 0 && f.Ext != "mhtml" }
+func (f Format) HasAudio() bool { return f.ACodec != "none" && f.ACodec != "" }
 
-// res is the frame's short side, which is what yt-dlp's -S res: compares, so
+// Res is the frame's short side, which is what yt-dlp's -S res: compares, so
 // a vertical 1080x1920 video counts as 1080p.
-func (f Format) res() int {
+func (f Format) Res() int {
 	if f.Width > 0 && f.Width < f.Height {
 		return int(f.Width)
 	}
@@ -68,19 +79,19 @@ func Qualities(info VideoInfo) []Quality {
 	var audio Format
 	for _, f := range info.Formats {
 		switch {
-		case f.hasVideo():
-			if cur, ok := best[f.res()]; !ok || betterVideo(f, cur) {
-				best[f.res()] = f
+		case f.HasVideo():
+			if cur, ok := best[f.Res()]; !ok || betterVideo(f, cur) {
+				best[f.Res()] = f
 			}
-		case f.hasAudio() && f.Ext == "m4a" && f.TBR >= audio.TBR:
+		case f.HasAudio() && f.Ext == "m4a" && f.TBR >= audio.TBR:
 			audio = f
 		}
 	}
 	var qualities []Quality
 	for res, f := range best {
-		size := f.size()
-		if size > 0 && !f.hasAudio() {
-			size += audio.size()
+		size := f.Size()
+		if size > 0 && !f.HasAudio() {
+			size += audio.Size()
 		}
 		qualities = append(qualities, Quality{Res: res, Size: size})
 	}

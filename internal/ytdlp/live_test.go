@@ -4,13 +4,15 @@
 //
 //	go test -tags live -run Live -v ./internal/ytdlp
 //
-// They install ytget's own yt-dlp.exe on first run.
+// They install ytget's own yt-dlp, and Deno if there's no JS runtime, on
+// first run. The download test needs ffmpeg and skips without it.
 
 package ytdlp_test
 
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -33,13 +35,20 @@ func liveSetup(t *testing.T) (context.Context, string, *proxy.Proxy) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	exe := filepath.Join(tools, "yt-dlp.exe")
+	exe := deps.YtdlpPath(tools)
 	if _, err := os.Stat(exe); err != nil {
-		t.Log("installing yt-dlp.exe")
+		t.Log("installing yt-dlp")
 		if err := deps.InstallYtdlp(ctx, exe, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
+	if deps.FindJSRuntime(tools) == "" {
+		t.Log("installing Deno")
+		if err := deps.InstallDeno(ctx, deps.DenoPath(tools), nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Logf("using %s and %s", exe, deps.FindJSRuntime(tools))
 	p, err := proxy.Start(proxy.YouTubeLookup(proxy.NewResolver()))
 	if err != nil {
 		t.Fatal(err)
@@ -55,20 +64,30 @@ func TestLiveProbeAndDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("%q by %s, %v", info.Title, info.ChannelName(), ytdlp.Qualities(info))
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("the download merges video and audio, which needs ffmpeg")
+	}
 
 	infoFile := filepath.Join(t.TempDir(), "info.json")
 	os.WriteFile(infoFile, raw, 0o644)
 	events := make(chan any, 64)
-	go ytdlp.Download(ctx, exe, ytdlp.DownloadArgs(p.URL(), infoFile, t.TempDir(), 144), events)
+	go ytdlp.Download(ctx, exe, p.URL(), ytdlp.DownloadArgs(infoFile, t.TempDir(), 144), events)
 	var result ytdlp.Result
+	var selected []string
 	updates := 0
 	for ev := range events {
 		switch ev := ev.(type) {
+		case ytdlp.Selected:
+			selected = ev.Formats
 		case ytdlp.Progress:
 			updates++
 		case ytdlp.Result:
 			result = ev
 		}
+	}
+	t.Logf("formats %v", selected)
+	if len(selected) == 0 {
+		t.Error("no Selected event before the progress")
 	}
 	if result.Err != nil {
 		t.Fatal(result.Err)
@@ -85,7 +104,7 @@ func TestLiveProbeAndDownload(t *testing.T) {
 
 func TestLiveChallengeSolverWorks(t *testing.T) {
 	ctx, exe, p := liveSetup(t)
-	cmd := ytdlp.Command(ctx, exe, append(ytdlp.BaseArgs(p.URL()), "-v", "--simulate", gangnam)...)
+	cmd := ytdlp.Command(ctx, exe, p.URL(), "-v", "--simulate", gangnam)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -114,9 +133,8 @@ func TestLiveNonASCIITitleSurvives(t *testing.T) {
 	// The printed file path goes through the same pipe as a real download's.
 	infoFile := filepath.Join(t.TempDir(), "info.json")
 	os.WriteFile(infoFile, raw, 0o644)
-	args := append(ytdlp.BaseArgs(p.URL()), "--load-info-json", infoFile,
-		"-o", "%(title).150B [%(id)s] %(height)sp.%(ext)s", "--print", "filename")
-	out, err := ytdlp.Command(ctx, exe, args...).Output()
+	out, err := ytdlp.Command(ctx, exe, p.URL(), "--load-info-json", infoFile,
+		"-o", "%(title).150B [%(id)s] %(height)sp.%(ext)s", "--print", "filename").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

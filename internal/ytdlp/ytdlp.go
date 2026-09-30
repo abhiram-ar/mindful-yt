@@ -11,34 +11,57 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/platform"
 )
 
-// BaseArgs are the options every yt-dlp run gets.
-func BaseArgs(proxyURL string) []string {
+// baseArgs are the options every yt-dlp run gets.
+func baseArgs() []string {
 	return []string{
 		"--ignore-config",
-		"--proxy", proxyURL,
+		"--config-locations", "-", // the proxy, from stdin; see Command
 		"--js-runtimes", "node",
 		"--no-playlist",
 		"--encoding", "utf-8",
 	}
 }
 
-// Command prepares a yt-dlp run that stops, along with everything it
-// started, when ctx is cancelled.
-func Command(ctx context.Context, path string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Env = append(os.Environ(), "PYTHONUTF8=1")
-	// yt-dlp.exe starts a Python child, which starts node and ffmpeg: stop them all.
+// running counts the yt-dlp processes started and not yet waited for.
+var running atomic.Int32
+
+// Command prepares a yt-dlp run through the proxy at proxyURL, with the
+// options every run gets. It stops, along with everything it started, when
+// ctx is cancelled.
+func Command(ctx context.Context, path, proxyURL string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, path, append(baseArgs(), args...)...)
+	// The proxy URL holds this run's password, and other local users can read
+	// a process's arguments on Linux and macOS. So it goes in on stdin, which
+	// "--config-locations -" makes yt-dlp read as a config file.
+	cmd.Stdin = strings.NewReader("--proxy " + proxyURL + "\n")
+	// PYTHONUTF8 keeps non-ASCII titles intact in piped output. yt-dlp's folder
+	// goes first on its PATH so it finds the Deno ytget may have put there.
+	cmd.Env = append(os.Environ(), "PYTHONUTF8=1",
+		"PATH="+filepath.Dir(path)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	// yt-dlp starts a Python child, which starts the JS runtime and ffmpeg: stop them all.
+	platform.NewProcessGroup(cmd)
 	cmd.Cancel = func() error { return platform.KillTree(cmd.Process.Pid) }
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
+}
+
+// Wait blocks until every yt-dlp that Probe or Download started has exited,
+// or until timeout. Call it after cancelling their context, so ytget doesn't
+// exit while one is still being stopped.
+func Wait(timeout time.Duration) {
+	for deadline := time.Now().Add(timeout); running.Load() > 0 && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 // Probe asks yt-dlp about a video without downloading it. The raw JSON comes
@@ -46,9 +69,12 @@ func Command(ctx context.Context, path string, args ...string) *exec.Cmd {
 // asking YouTube again.
 func Probe(ctx context.Context, path, proxyURL, watchURL string) (VideoInfo, []byte, error) {
 	var stdout, stderr bytes.Buffer
-	cmd := Command(ctx, path, append(BaseArgs(proxyURL), "-J", watchURL)...)
+	cmd := Command(ctx, path, proxyURL, "-J", watchURL)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	running.Add(1)
+	err := cmd.Run()
+	running.Add(-1)
+	if err != nil {
 		return VideoInfo{}, nil, errorFrom(stderr.String(), err)
 	}
 	var info VideoInfo
@@ -70,8 +96,8 @@ func errorFrom(stderr string, err error) error {
 }
 
 // DownloadArgs downloads the probed video (saved as infoJSON) at up to res.
-func DownloadArgs(proxyURL, infoJSON, outputDir string, res int) []string {
-	return append(BaseArgs(proxyURL),
+func DownloadArgs(infoJSON, outputDir string, res int) []string {
+	return []string{
 		"--load-info-json", infoJSON,
 		"-S", fmt.Sprintf("res:%d,vcodec:h264,acodec:m4a", res),
 		"--merge-output-format", "mp4",
@@ -79,19 +105,25 @@ func DownloadArgs(proxyURL, infoJSON, outputDir string, res int) []string {
 		// Height in the name, so copies at different resolutions don't collide.
 		"-o", "%(title).150B [%(id)s] %(height)sp.%(ext)s",
 		// Machine-readable progress and results. --print implies quiet and
-		// simulate, so switch the download and its progress back on.
-		"--no-simulate", "--progress", "--newline",
-		"--progress-template", "download:ytget-progress %(progress.status)s %(info.format_id)s "+
-			"%(progress.downloaded_bytes)s %(progress.total_bytes)s "+
+		// simulate, so switch the download and its progress back on. Five
+		// progress lines a second is plenty for the screen.
+		"--no-simulate", "--progress", "--newline", "--progress-delta", "0.2",
+		"--progress-template", "download:ytget-progress %(progress.status)s %(info.format_id)s " +
+			"%(progress.downloaded_bytes)s %(progress.total_bytes)s " +
 			"%(progress.total_bytes_estimate)s %(progress.speed)s %(progress.eta)s",
 		"--print", "before_dl:ytget-formats %(format_id)s",
 		"--print", "after_move:ytget-done %(height)s %(filepath)s",
-	)
+	}
 }
+
+// Selected names the formats yt-dlp picked, in the order it downloads them
+// (video before audio). It comes before any Progress.
+type Selected struct{ Formats []string }
 
 // Progress is a download's state, per part (video and audio come separately).
 type Progress struct {
 	Part, Parts int
+	FormatID    string
 	Done, Total float64 // bytes of the current part
 	Speed, ETA  float64 // bytes per second, seconds
 	Finished    bool    // the current part is complete
@@ -104,26 +136,29 @@ type Result struct {
 	Err    error
 }
 
-// Download runs yt-dlp and sends Progress values, then one Result, on events
-// before closing it.
-func Download(ctx context.Context, path string, args []string, events chan<- any) {
+// Download runs yt-dlp through the proxy at proxyURL and sends a Selected,
+// Progress values, then one Result on events before closing it.
+func Download(ctx context.Context, path, proxyURL string, args []string, events chan<- any) {
 	defer close(events)
-	var result Result
-	defer func() {
+	send := func(ev any) {
 		select {
-		case events <- result:
+		case events <- ev:
 		case <-ctx.Done():
 		}
-	}()
+	}
+	var result Result
+	defer func() { send(result) }()
 
 	var stderr bytes.Buffer
-	cmd := Command(ctx, path, args...)
+	cmd := Command(ctx, path, proxyURL, args...)
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		result.Err = err
 		return
 	}
+	running.Add(1)
+	defer running.Add(-1)
 	if err := cmd.Start(); err != nil {
 		result.Err = err
 		return
@@ -136,8 +171,14 @@ func Download(ctx context.Context, path string, args []string, events chan<- any
 		switch {
 		case strings.HasPrefix(line, "ytget-formats "):
 			formats = strings.Split(strings.TrimPrefix(line, "ytget-formats "), "+")
+			send(Selected{Formats: formats})
 		case strings.HasPrefix(line, "ytget-progress "):
-			if p, ok := parseProgress(line, formats); ok {
+			p, ok := parseProgress(line, formats)
+			switch {
+			case !ok:
+			case p.Finished:
+				send(p) // the screen needs this one to turn the bar green
+			default:
 				select { // drop an update rather than stall yt-dlp if the screen is behind
 				case events <- p:
 				default:
@@ -164,7 +205,7 @@ func parseProgress(line string, formats []string) (Progress, bool) {
 	if len(f) != 7 {
 		return Progress{}, false
 	}
-	p := Progress{Part: 1, Parts: max(1, len(formats)), Finished: f[0] == "finished"}
+	p := Progress{Part: 1, Parts: max(1, len(formats)), FormatID: f[1], Finished: f[0] == "finished"}
 	if i := slices.Index(formats, f[1]); i >= 0 {
 		p.Part = i + 1
 	}

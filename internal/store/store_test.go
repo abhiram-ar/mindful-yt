@@ -42,13 +42,32 @@ func TestBrokenConfigIsReported(t *testing.T) {
 	}
 }
 
-func TestWindowsVariablesExpand(t *testing.T) {
+func TestOutputPathsExpand(t *testing.T) {
 	t.Setenv("YTGET_TEST_DIR", `C:\Users\someone`)
-	if got := expandWindowsVars(`%YTGET_TEST_DIR%\Videos`); got != `C:\Users\someone\Videos` {
+	if got := expandPath(`%YTGET_TEST_DIR%\Videos`); got != `C:\Users\someone\Videos` {
 		t.Errorf("got %q", got)
 	}
-	if got := expandWindowsVars(`%YTGET_NOT_SET%\x`); got != `%YTGET_NOT_SET%\x` {
+	if got := expandPath(`%YTGET_NOT_SET%\x`); got != `%YTGET_NOT_SET%\x` {
 		t.Errorf("unknown variable changed: %q", got)
+	}
+	home, _ := os.UserHomeDir()
+	if got := expandPath("~/Videos/YT-Saved"); got != home+"/Videos/YT-Saved" {
+		t.Errorf("got %q", got)
+	}
+	if got := expandPath("/srv/~/x"); got != "/srv/~/x" {
+		t.Errorf("a ~ that isn't leading changed: %q", got)
+	}
+}
+
+func TestDefaultOutputDirPerOS(t *testing.T) {
+	for goos, want := range map[string]string{
+		"windows": `%USERPROFILE%\Videos\YT-Saved`,
+		"darwin":  "~/Movies/YT-Saved",
+		"linux":   "~/Videos/YT-Saved",
+	} {
+		if got := defaultOutputDir(goos); got != want {
+			t.Errorf("%s: got %q, want %q", goos, got, want)
+		}
 	}
 }
 

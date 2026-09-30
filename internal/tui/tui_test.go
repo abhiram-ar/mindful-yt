@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
@@ -19,8 +20,114 @@ func testApp(t *testing.T, cfg store.Config, entries []store.Entry) *App {
 	dir := t.TempDir()
 	return &App{
 		Ctx: context.Background(), Store: store.Store{Dir: dir}, Config: cfg, Entries: entries,
-		Ytdlp: filepath.Join(dir, "yt-dlp.exe"), ProxyURL: "http://ytget:x@127.0.0.1:1",
+		Tools: filepath.Join(dir, "tools"), ProxyURL: "http://ytget:x@127.0.0.1:1",
 	}
+}
+
+// update feeds msg to the model and returns the new model.
+func update(m model, msg tea.Msg) model {
+	next, _ := m.Update(msg)
+	return next.(model)
+}
+
+func TestFinishedStreamStaysGreenAndTheNextAppearsBelow(t *testing.T) {
+	m := newModel(testApp(t, store.DefaultConfig, nil), Options{})
+	m.stage, m.taskbar = stageDownloading, true
+	m.info = ytdlp.VideoInfo{Title: "Big Buck Bunny", Formats: []ytdlp.Format{
+		{ID: "137", VCodec: "avc1.640028", ACodec: "none", Width: 1920, Height: 1080, Filesize: 100 << 20},
+		{ID: "140", VCodec: "none", ACodec: "mp4a.40.2", Ext: "m4a", Filesize: 4 << 20},
+	}}
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = update(m, ytdlp.Selected{Formats: []string{"137", "140"}})
+	if view := m.View().Content; !strings.Contains(view, "Starting the download") || strings.Contains(view, "Total") {
+		t.Errorf("before any progress, want only a starting line:\n%s", view)
+	}
+	m = update(m, ytdlp.Progress{Part: 1, Parts: 2, FormatID: "137", Done: 50 << 20, Total: 100 << 20})
+
+	lines := strings.Split(m.View().Content, "\n")
+	video, audio, total := lineWith(lines, "Video 1080p"), lineWith(lines, "Audio"), lineWith(lines, "Total")
+	if video < 0 || audio >= 0 || total < 0 {
+		t.Fatalf("while the video downloads, want only a video row and a total:\n%s", m.View().Content)
+	}
+	if strings.Contains(lines[video], "38;5;42") {
+		t.Error("the unfinished video bar is already green")
+	}
+
+	m = update(m, ytdlp.Progress{Part: 1, Parts: 2, FormatID: "137", Done: 100 << 20, Total: 100 << 20, Finished: true})
+	m = update(m, ytdlp.Progress{Part: 2, Parts: 2, FormatID: "140", Done: 1 << 20, Total: 4 << 20})
+	lines = strings.Split(m.View().Content, "\n")
+	video, audio, total = lineWith(lines, "Video 1080p"), lineWith(lines, "Audio"), lineWith(lines, "Total")
+	if video < 0 || audio < 0 || !(video < audio && audio < total) {
+		t.Fatalf("want the video row, then audio below it, then the total:\n%s", m.View().Content)
+	}
+	if !strings.Contains(lines[video], "38;5;42") || !strings.Contains(lines[video], "100%") {
+		t.Errorf("the finished video row isn't a full green bar: %q", lines[video])
+	}
+	if strings.Contains(lines[audio], "38;5;42") {
+		t.Error("the audio bar is green while it's still downloading")
+	}
+	for _, line := range lines {
+		if w := ansi.StringWidth(line); w > 99 {
+			t.Errorf("line is %d columns in a 100-column terminal: %q", w, line)
+		}
+	}
+	if pb := m.View().ProgressBar; pb == nil || pb.Value != 97 { // 101 of 104 MiB
+		t.Errorf("taskbar progress: %+v", pb)
+	}
+}
+
+func TestNarrowTerminalLinesStayInside(t *testing.T) {
+	m := newModel(testApp(t, store.DefaultConfig, nil), Options{})
+	m.stage = stageDownloading
+	m.info = ytdlp.VideoInfo{Title: "A title much longer than thirty columns", Formats: []ytdlp.Format{
+		{ID: "18", VCodec: "avc1", ACodec: "mp4a.40.2", Width: 640, Height: 360, Filesize: 20 << 20},
+	}}
+	m = update(m, tea.WindowSizeMsg{Width: 30, Height: 20})
+	m = update(m, ytdlp.Selected{Formats: []string{"18"}})
+	m = update(m, ytdlp.Progress{Part: 1, Parts: 1, FormatID: "18", Done: 5 << 20, Total: 20 << 20, Speed: 3 << 20, ETA: 5})
+	for _, line := range strings.Split(m.View().Content, "\n") {
+		if w := ansi.StringWidth(line); w > 29 {
+			t.Errorf("line is %d columns in a 30-column terminal: %q", w, ansi.Strip(line))
+		}
+	}
+}
+
+func TestTaskbarProgressOnlyInTerminalsThatDrawIt(t *testing.T) {
+	env := func(pairs ...string) func(string) string {
+		vars := map[string]string{}
+		for i := 0; i+1 < len(pairs); i += 2 {
+			vars[pairs[i]] = pairs[i+1]
+		}
+		return func(k string) string { return vars[k] }
+	}
+	for _, c := range []struct {
+		name string
+		env  func(string) string
+		want bool
+	}{
+		{"Windows Terminal", env("WT_SESSION", "0f1c9e1a"), true},
+		{"ConEmu", env("ConEmuANSI", "ON"), true},
+		{"Ghostty 1.2", env("TERM_PROGRAM", "ghostty", "TERM_PROGRAM_VERSION", "1.2.0"), true},
+		{"old Ghostty", env("TERM_PROGRAM", "ghostty", "TERM_PROGRAM_VERSION", "1.1.3"), false},
+		{"iTerm2 3.6.6", env("TERM_PROGRAM", "iTerm.app", "TERM_PROGRAM_VERSION", "3.6.6"), true},
+		{"iTerm2 3.6.10", env("TERM_PROGRAM", "iTerm.app", "TERM_PROGRAM_VERSION", "3.6.10"), true},
+		{"iTerm2 3.5 (notification spam)", env("TERM_PROGRAM", "iTerm.app", "TERM_PROGRAM_VERSION", "3.5.14"), false},
+		{"VS Code", env("TERM_PROGRAM", "vscode"), false},
+		{"unknown", env(), false},
+	} {
+		if got := termProgress(c.env); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func lineWith(lines []string, text string) int {
+	for i, line := range lines {
+		if strings.Contains(ansi.Strip(line), text) {
+			return i
+		}
+	}
+	return -1
 }
 
 func press(m model, key rune) model {

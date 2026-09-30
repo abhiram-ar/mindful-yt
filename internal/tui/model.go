@@ -4,12 +4,17 @@ package tui
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
@@ -30,14 +35,18 @@ type App struct {
 	Store    store.Store
 	Config   store.Config
 	Entries  []store.Entry
-	Ytdlp    string // ytget's own copy of yt-dlp.exe
+	Tools    string // ytget's tools folder: its own yt-dlp, and Deno if it installed one
 	ProxyURL string // the private proxy yt-dlp goes through
 }
 
-// Run shows the interface until the user is done and returns the exit code.
+// Run shows the interface until the user is done, or until app.Ctx is
+// cancelled (the terminal went away), and returns the exit code.
 func Run(app *App, opts Options) (int, error) {
-	final, err := tea.NewProgram(newModel(app, opts)).Run()
-	if err != nil {
+	final, err := tea.NewProgram(newModel(app, opts), tea.WithContext(app.Ctx)).Run()
+	switch {
+	case errors.Is(err, tea.ErrProgramKilled) && app.Ctx.Err() != nil:
+		return 129, nil // hung up
+	case err != nil:
 		return 1, err
 	}
 	return final.(model).exitCode, nil
@@ -50,10 +59,10 @@ const (
 	stageSaved                    // already saved: play a copy or get another resolution
 	stageBusy                     // spinner while checking tools or looking the video up
 	stageDeps                     // tools are missing: offer to install them
-	stageInstalling               // downloading yt-dlp
+	stageInstalling               // ytget downloading yt-dlp or Deno
 	stagePick                     // choose a resolution
 	stageReason                   // say why you're watching
-	stageDownloading              // progress bar
+	stageDownloading              // progress bars
 	stageDone                     // saved: play, open folder or quit
 )
 
@@ -63,14 +72,25 @@ type (
 		summary string // for --check
 	}
 	installProgressMsg struct{ done, total int64 }
-	installDoneMsg     struct{ err error }
-	wingetDoneMsg      struct{ err error }
-	probeDoneMsg       struct {
+	installDoneMsg     struct {
+		name string
+		err  error
+	}
+	commandDoneMsg struct{ err error }
+	probeDoneMsg   struct {
 		info ytdlp.VideoInfo
 		raw  []byte
 		err  error
 	}
 )
+
+// part is one stream of the download (the video, then the audio).
+type part struct {
+	label   string  // "Video 1080p", "Audio"
+	size    float64 // expected bytes from the lookup; 0 if YouTube didn't say
+	started bool
+	prog    ytdlp.Progress
+}
 
 type model struct {
 	app  *App
@@ -83,12 +103,15 @@ type model struct {
 	exitCode  int
 	quitting  bool
 	initCmd   tea.Cmd
+	width     int  // terminal columns; 0 until the first WindowSizeMsg
+	taskbar   bool // the terminal shows progress in its tab or taskbar
 
-	link   textinput.Model
-	reason textinput.Model
-	spin   spinner.Model
-	bar    progress.Model
-	cursor int
+	link    textinput.Model
+	reason  textinput.Model
+	spin    spinner.Model
+	bar     progress.Model // in progress
+	doneBar progress.Model // finished
+	cursor  int
 
 	videoID, watchURL string
 	saved             []store.Entry
@@ -96,6 +119,7 @@ type model struct {
 	missing           []deps.Dependency
 	queue             []deps.Dependency
 	triedInstall      bool
+	installing        string // what ytget is downloading
 	installed, needed int64
 
 	info       ytdlp.VideoInfo
@@ -106,7 +130,7 @@ type model struct {
 
 	events <-chan any
 	cancel context.CancelFunc
-	prog   ytdlp.Progress
+	parts  []part
 	logged store.Entry
 }
 
@@ -126,7 +150,11 @@ func newModel(app *App, opts Options) model {
 	m := model{
 		app: app, opts: opts, link: linkInput, reason: reasonInput,
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(accent)),
-		bar:  progress.New(progress.WithDefaultBlend(), progress.WithWidth(50)),
+		bar:  progress.New(progress.WithDefaultBlend()),
+		// One colour fills solidly only with full blocks; the default half block
+		// looks solid only when blended.
+		doneBar: progress.New(progress.WithColors(lipgloss.Color("42")), progress.WithFillCharacters('█', '░')),
+		taskbar: termProgress(os.Getenv),
 	}
 	var cmd tea.Cmd
 	switch {
@@ -143,10 +171,43 @@ func newModel(app *App, opts Options) model {
 
 func (m model) Init() tea.Cmd { return tea.Batch(m.initCmd, m.spin.Tick) }
 
+// termProgress reports whether the terminal draws OSC 9;4 as progress in its
+// tab or taskbar. Other terminals may print the sequence, or (iTerm2 before
+// 3.6.6) pop up a notification for every update, so only known ones get it.
+func termProgress(getenv func(string) string) bool {
+	switch {
+	case getenv("WT_SESSION") != "", getenv("ConEmuANSI") == "ON": // Windows Terminal, ConEmu
+		return true
+	}
+	version := getenv("TERM_PROGRAM_VERSION")
+	switch getenv("TERM_PROGRAM") {
+	case "ghostty":
+		return versionAtLeast(version, 1, 2, 0)
+	case "iTerm.app":
+		return versionAtLeast(version, 3, 6, 6)
+	}
+	return false
+}
+
+func versionAtLeast(version string, want ...int) bool {
+	parts := strings.Split(version, ".")
+	for i, w := range want {
+		n := 0
+		if i < len(parts) {
+			digits := strings.TrimRightFunc(parts[i], func(r rune) bool { return r < '0' || r > '9' })
+			n, _ = strconv.Atoi(digits)
+		}
+		if n != w {
+			return n > w
+		}
+	}
+	return true
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.bar.SetWidth(min(60, max(10, msg.Width-4)))
+		m.width = msg.Width
 		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -164,15 +225,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitFor(m.events)
 	case installDoneMsg:
 		if msg.err != nil {
-			return m.fail("Couldn't download yt-dlp: " + msg.err.Error())
+			return m.fail("Couldn't download " + msg.name + ": " + msg.err.Error())
 		}
 		return m.installNext()
-	case wingetDoneMsg:
+	case commandDoneMsg:
 		return m.installNext() // whether it worked is judged by checking again
 	case probeDoneMsg:
 		return m.probed(msg)
+	case ytdlp.Selected:
+		m = m.selected(msg)
+		return m, waitFor(m.events)
 	case ytdlp.Progress:
-		m.prog = msg
+		m = m.progressed(msg)
 		return m, waitFor(m.events)
 	case ytdlp.Result:
 		return m.downloaded(msg)

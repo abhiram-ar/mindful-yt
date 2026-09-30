@@ -3,11 +3,12 @@ package tui
 import (
 	"cmp"
 	"fmt"
-	"os/exec"
 	"strings"
 
+	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
 	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/human"
@@ -33,12 +34,13 @@ func (m model) View() tea.View {
 		return tea.NewView(b.String())
 	}
 
+	var taskbar *tea.ProgressBar // progress in the terminal's tab or taskbar, where supported
 	switch m.stage {
 	case stageLink:
 		b.WriteString("Paste a YouTube link:\n" + m.link.View() + "\n")
 
 	case stageSaved:
-		b.WriteString(bold.Render(m.saved[0].Title) + "\n\nYou already have this video:\n")
+		b.WriteString(bold.Render(m.fit(m.saved[0].Title)) + "\n\nYou already have this video:\n")
 		for i, e := range m.saved {
 			label := "saved " + e.Date
 			if q := cmp.Or(e.Height, e.Quality); q > 0 { // what arrived, else what was asked for
@@ -53,22 +55,23 @@ func (m model) View() tea.View {
 
 	case stageDeps:
 		b.WriteString("ytget needs some tools that aren't installed:\n\n")
-		_, wingetErr := exec.LookPath("winget")
 		for _, d := range m.missing {
-			how := "downloads the official yt-dlp.exe from GitHub and checks its checksum"
+			how := "install it yourself: " + d.Manual
 			switch {
-			case d.Winget != "" && wingetErr == nil:
-				how = "runs: winget " + strings.Join(deps.WingetArgs(d.Winget), " ")
-			case d.Winget != "":
-				how = "winget isn't available; install it yourself: " + d.Manual
+			case d.Download != nil:
+				how = "ytget downloads the official build from GitHub and checks its checksum"
+			case d.Command != nil:
+				how = "runs: " + deps.CommandLine(d.Command)
 			}
 			fmt.Fprintf(&b, "  %s %s\n    %s\n", bold.Render(d.Name), faint.Render("("+d.Why+")"), faint.Render(how))
 		}
 
 	case stageInstalling:
-		b.WriteString("Downloading yt-dlp from GitHub\n\n")
-		b.WriteString(m.bar.ViewAs(fraction(float64(m.installed), float64(m.needed))) + "\n")
+		pct := fraction(float64(m.installed), float64(m.needed))
+		fmt.Fprintf(&b, "Downloading %s from GitHub\n\n", m.installing)
+		b.WriteString(barView(m.bar, pct, m.lineWidth()) + "\n")
 		b.WriteString(faint.Render(human.Bytes(float64(m.installed))+" of "+human.Bytes(float64(m.needed))) + "\n")
+		taskbar = tea.NewProgressBar(tea.ProgressBarDefault, int(pct*100))
 
 	case stagePick:
 		b.WriteString(m.videoHeader() + "Pick a resolution:\n")
@@ -87,23 +90,12 @@ func (m model) View() tea.View {
 
 	case stageDownloading:
 		b.WriteString(m.videoHeader())
-		p := m.prog
-		if p.Finished && p.Part == p.Parts {
-			b.WriteString(m.spin.View() + " Finishing up...\n")
-			break
+		rows, overall, finishing := m.partsView()
+		b.WriteString(rows)
+		taskbar = tea.NewProgressBar(tea.ProgressBarDefault, int(overall*100))
+		if finishing {
+			taskbar = tea.NewProgressBar(tea.ProgressBarIndeterminate, 0)
 		}
-		b.WriteString(m.bar.ViewAs(fraction(p.Done, p.Total)) + "\n")
-		stats := []string{fmt.Sprintf("part %d of %d", max(1, p.Part), max(1, p.Parts))}
-		if p.Total > 0 {
-			stats = append(stats, human.Bytes(p.Done)+" of "+human.Bytes(p.Total))
-		}
-		if p.Speed > 0 {
-			stats = append(stats, human.Bytes(p.Speed)+"/s")
-		}
-		if p.ETA > 0 {
-			stats = append(stats, human.Duration(p.ETA)+" left")
-		}
-		b.WriteString(faint.Render(strings.Join(stats, " · ")) + "\n")
 
 	case stageDone:
 		b.WriteString(m.savedLine() + "\n")
@@ -115,12 +107,118 @@ func (m model) View() tea.View {
 	if help := m.help(); help != "" {
 		b.WriteString("\n" + faint.Render(help) + "\n")
 	}
-	return tea.NewView(b.String())
+	v := tea.NewView(b.String())
+	if m.taskbar {
+		v.ProgressBar = taskbar
+	}
+	return v
 }
 
+// partsView draws a row for each stream that has started. A finished stream
+// stays on screen with a green bar, and the next one appears below it. With
+// more than one stream there's a total underneath. It also returns the overall
+// fraction done, and whether every stream is in and yt-dlp is finishing up.
+func (m model) partsView() (rows string, overall float64, finishing bool) {
+	if len(m.parts) == 0 || !m.parts[0].started {
+		return m.spin.View() + " Starting the download...\n", 0, false
+	}
+	labelWidth := lipgloss.Width("Total")
+	for _, p := range m.parts {
+		labelWidth = max(labelWidth, lipgloss.Width(p.label))
+	}
+	labelWidth += 2
+	barWidth := m.lineWidth() - labelWidth
+
+	var b strings.Builder
+	var done, total, finished float64
+	totalKnown, finishing := true, true
+	for _, p := range m.parts {
+		size := cmp.Or(p.prog.Total, p.size)
+		total += size
+		totalKnown = totalKnown && size > 0
+		if !p.started {
+			finishing = false
+			continue
+		}
+		bar, pct := m.bar, fraction(p.prog.Done, size)
+		if p.prog.Finished {
+			bar, pct = m.doneBar, 1
+			finished++
+			done += size
+		} else {
+			finishing = false
+			done += p.prog.Done
+		}
+		b.WriteString(m.fit(pad(p.label, labelWidth)+barView(bar, pct, barWidth)) + "\n")
+		b.WriteString(m.fit(strings.Repeat(" ", labelWidth)+faint.Render(p.stats())) + "\n")
+	}
+
+	if totalKnown {
+		overall = fraction(done, total)
+	} else if current := m.parts[min(int(finished), len(m.parts)-1)]; current.started && !current.prog.Finished {
+		overall = (finished + fraction(current.prog.Done, cmp.Or(current.prog.Total, current.size))) / float64(len(m.parts))
+	} else {
+		overall = finished / float64(len(m.parts))
+	}
+	if len(m.parts) > 1 && totalKnown {
+		bar := m.bar
+		if finishing {
+			bar = m.doneBar
+		}
+		b.WriteString(m.fit(pad("Total", labelWidth)+barView(bar, overall, barWidth)) + "\n")
+	}
+	if finishing {
+		label := "Finishing up..."
+		if len(m.parts) > 1 {
+			label = "Joining video and audio..."
+		}
+		b.WriteString("\n" + m.spin.View() + " " + label + "\n")
+	}
+	return b.String(), overall, finishing
+}
+
+func (p part) stats() string {
+	size := cmp.Or(p.prog.Total, p.size)
+	if p.prog.Finished {
+		return human.Bytes(size) + " · done"
+	}
+	stats := []string{human.Bytes(p.prog.Done)}
+	if size > 0 {
+		stats[0] += " of " + human.Bytes(size)
+	}
+	if p.prog.Speed > 0 {
+		stats = append(stats, human.Bytes(p.prog.Speed)+"/s")
+	}
+	if p.prog.ETA > 0 {
+		stats = append(stats, human.Duration(p.prog.ETA)+" left")
+	}
+	return strings.Join(stats, " · ")
+}
+
+func barView(bar progress.Model, pct float64, width int) string {
+	bar.SetWidth(max(10, width))
+	return bar.ViewAs(pct)
+}
+
+func pad(s string, width int) string {
+	return s + strings.Repeat(" ", max(0, width-lipgloss.Width(s)))
+}
+
+// lineWidth is how wide a line may be. One column stays spare, so a terminal
+// that shrinks by a column doesn't wrap the frame.
+func (m model) lineWidth() int {
+	if m.width <= 0 {
+		return 79 // before the first WindowSizeMsg
+	}
+	return max(20, m.width-1)
+}
+
+// fit shortens s to one line.
+func (m model) fit(s string) string { return ansi.Truncate(s, m.lineWidth(), "…") }
+
 func (m model) videoHeader() string {
-	return bold.Render(m.info.Title) + "\n" +
-		faint.Render(m.info.ChannelName()+" · "+human.Duration(m.info.Duration)) + "\n\n"
+	return bold.Render(m.fit(m.info.Title)) + "\n" +
+		faint.Render(m.fit(m.info.ChannelName()+" · "+human.Duration(m.info.Duration))) + "\n\n"
 }
 
 func (m model) choice(i int, label string) string {

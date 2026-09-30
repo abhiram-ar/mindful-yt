@@ -53,11 +53,11 @@ func (m model) startDownloadFlow() (model, tea.Cmd) {
 
 func (m model) checkDeps() (model, tea.Cmd) {
 	m.stage, m.busyLabel = stageBusy, "Checking tools..."
-	exe, summary := m.app.Ytdlp, m.opts.CheckOnly
+	tools, summary := m.app.Tools, m.opts.CheckOnly
 	return m, func() tea.Msg {
-		msg := depsCheckedMsg{missing: deps.Missing(exe)}
+		msg := depsCheckedMsg{missing: deps.Missing(tools)}
 		if summary && len(msg.missing) == 0 {
-			msg.summary = deps.Summary(exe)
+			msg.summary = deps.Summary(tools)
 		}
 		return msg
 	}
@@ -86,42 +86,49 @@ func (m model) installNext() (model, tea.Cmd) {
 	for len(m.queue) > 0 {
 		dep := m.queue[0]
 		m.queue = m.queue[1:]
-		if dep.Winget == "" {
-			return m.installYtdlp()
+		switch {
+		case dep.Download != nil:
+			return m.download(dep)
+		case dep.Command != nil:
+			// The installer takes over the terminal while it runs (sudo may ask
+			// for a password), then the screen comes back.
+			cmd := exec.Command(dep.Command[0], dep.Command[1:]...)
+			return m, tea.ExecProcess(cmd, func(err error) tea.Msg { return commandDoneMsg{err} })
 		}
-		if _, err := exec.LookPath("winget"); err != nil {
-			continue // the check afterwards reports it, with where to get it
-		}
-		// winget takes over the terminal while it runs, then the screen comes back.
-		cmd := exec.Command("winget", deps.WingetArgs(dep.Winget)...)
-		return m, tea.ExecProcess(cmd, func(err error) tea.Msg { return wingetDoneMsg{err} })
+		// Neither: the check afterwards reports it, with how to get it.
 	}
 	platform.RefreshPath()
 	return m.checkDeps()
 }
 
-func (m model) installYtdlp() (model, tea.Cmd) {
-	m.stage = stageInstalling
+// download has ytget fetch a tool itself, showing a progress bar.
+func (m model) download(dep deps.Dependency) (model, tea.Cmd) {
+	m.stage, m.installing = stageInstalling, dep.Name
 	m.installed, m.needed = 0, 0
 	events := make(chan any, 16)
 	m.events = events
-	ctx, dest := m.app.Ctx, m.app.Ytdlp
+	ctx := m.app.Ctx
 	go func() {
 		defer close(events)
-		err := deps.InstallYtdlp(ctx, dest, func(done, total int64) {
-			select {
-			case events <- installProgressMsg{done, total}:
-			default:
+		var last time.Time
+		err := dep.Download(ctx, func(done, total int64) {
+			// A few updates a second is enough; the bytes arrive much faster.
+			if now := time.Now(); now.Sub(last) >= 100*time.Millisecond || done == total {
+				last = now
+				select {
+				case events <- installProgressMsg{done, total}:
+				default:
+				}
 			}
 		})
-		events <- installDoneMsg{err}
+		events <- installDoneMsg{dep.Name, err}
 	}()
 	return m, waitFor(events)
 }
 
 func (m model) startProbe() (model, tea.Cmd) {
 	m.stage, m.busyLabel = stageBusy, "Looking up the video..."
-	ctx, exe, proxyURL, watch := m.app.Ctx, m.app.Ytdlp, m.app.ProxyURL, m.watchURL
+	ctx, exe, proxyURL, watch := m.app.Ctx, deps.YtdlpPath(m.app.Tools), m.app.ProxyURL, m.watchURL
 	return m, func() tea.Msg {
 		info, raw, err := ytdlp.Probe(ctx, exe, proxyURL, watch)
 		return probeDoneMsg{info, raw, err}
@@ -184,14 +191,47 @@ func (m model) startDownload() (model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(m.app.Ctx)
 	events := make(chan any, 64)
 	m.events, m.cancel = events, cancel
-	m.stage, m.prog = stageDownloading, ytdlp.Progress{}
-	exe := m.app.Ytdlp
-	args := ytdlp.DownloadArgs(m.app.ProxyURL, infoFile.Name(), m.app.Config.OutputDir, m.quality)
+	m.stage, m.parts = stageDownloading, nil
+	exe, proxyURL := deps.YtdlpPath(m.app.Tools), m.app.ProxyURL
+	args := ytdlp.DownloadArgs(infoFile.Name(), m.app.Config.OutputDir, m.quality)
 	go func() {
 		defer os.Remove(infoFile.Name())
-		ytdlp.Download(ctx, exe, args, events)
+		ytdlp.Download(ctx, exe, proxyURL, args, events)
 	}()
 	return m, waitFor(events)
+}
+
+// selected sets up one progress row per stream yt-dlp is about to download.
+func (m model) selected(sel ytdlp.Selected) model {
+	m.parts = make([]part, len(sel.Formats))
+	for i, id := range sel.Formats {
+		f, ok := m.info.Format(id)
+		m.parts[i] = part{label: streamLabel(f, ok), size: f.Size()}
+	}
+	return m
+}
+
+func streamLabel(f ytdlp.Format, known bool) string {
+	switch {
+	case !known:
+		return "Download"
+	case f.HasVideo() && f.HasAudio():
+		return fmt.Sprintf("Video %dp + audio", f.Res())
+	case f.HasVideo():
+		return fmt.Sprintf("Video %dp", f.Res())
+	case f.HasAudio():
+		return "Audio"
+	}
+	return "Download"
+}
+
+func (m model) progressed(p ytdlp.Progress) model {
+	i := max(1, p.Part) - 1
+	for len(m.parts) <= i {
+		m.parts = append(m.parts, part{label: "Download"})
+	}
+	m.parts[i].started, m.parts[i].prog = true, p
+	return m
 }
 
 func (m model) downloaded(result ytdlp.Result) (model, tea.Cmd) {

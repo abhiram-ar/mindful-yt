@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -25,10 +26,21 @@ type Config struct {
 
 // DefaultConfig is written to config.json on first run.
 var DefaultConfig = Config{
-	OutputDir:       `%USERPROFILE%\Videos\YT-Saved`,
+	OutputDir:       defaultOutputDir(runtime.GOOS),
 	DailyLimit:      3,
 	MaxHeight:       1080,
 	MinReasonLength: 10,
+}
+
+// defaultOutputDir is a YT-Saved folder where the OS keeps videos.
+func defaultOutputDir(goos string) string {
+	switch goos {
+	case "windows":
+		return `%USERPROFILE%\Videos\YT-Saved`
+	case "darwin":
+		return "~/Movies/YT-Saved"
+	}
+	return "~/Videos/YT-Saved"
 }
 
 // Entry is one line of history.jsonl.
@@ -54,11 +66,13 @@ func Dirs() (data, tools string, err error) {
 	if home := os.Getenv("YTGET_HOME"); home != "" {
 		return home, home, nil
 	}
-	configDir, err := os.UserConfigDir() // %APPDATA%
+	// %APPDATA%, ~/Library/Application Support, or ~/.config
+	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", "", err
 	}
-	cacheDir, err := os.UserCacheDir() // %LOCALAPPDATA%
+	// %LOCALAPPDATA%, ~/Library/Caches, or ~/.cache
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return "", "", err
 	}
@@ -93,20 +107,27 @@ func (s Store) LoadConfig() (Config, error) {
 	if err := json.Unmarshal(bytes.TrimPrefix(data, bom), &cfg); err != nil {
 		return Config{}, fmt.Errorf("%s is not valid JSON: %w", path, err)
 	}
-	cfg.OutputDir = expandWindowsVars(cfg.OutputDir)
+	cfg.OutputDir = expandPath(cfg.OutputDir)
 	return cfg, nil
 }
 
 var windowsVarRe = regexp.MustCompile(`%([^%]+)%`)
 
-// expandWindowsVars expands %NAME% the way Windows does, leaving unknown names alone.
-func expandWindowsVars(s string) string {
-	return windowsVarRe.ReplaceAllStringFunc(s, func(m string) string {
+// expandPath expands a leading ~ to the home folder, and %NAME% the way
+// Windows does, leaving unknown names alone.
+func expandPath(s string) string {
+	s = windowsVarRe.ReplaceAllStringFunc(s, func(m string) string {
 		if v, ok := os.LookupEnv(m[1 : len(m)-1]); ok {
 			return v
 		}
 		return m
 	})
+	if s == "~" || strings.HasPrefix(s, "~/") || strings.HasPrefix(s, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			s = home + s[1:]
+		}
+	}
+	return s
 }
 
 // ReadHistory returns every readable line of history.jsonl, oldest first.
