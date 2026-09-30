@@ -1,9 +1,8 @@
 # ytget
 
 Download a single YouTube video when YouTube's DNS is blocked, on Windows,
-macOS or Linux. ytget runs yt-dlp through a private local proxy that looks
-YouTube up over DNS-over-HTTPS, so nothing else on your machine can reach
-youtube.com.
+macOS or Linux. ytget runs [yt-dlp](https://github.com/yt-dlp/yt-dlp) through a
+private local proxy that looks YouTube up over DNS-over-HTTPS.
 
 Single videos only, a daily limit, and a reason for every download.
 
