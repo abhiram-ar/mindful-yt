@@ -1,4 +1,4 @@
-# ytget
+## ytget
 
 Download a single YouTube video while YouTube stays blocked in your hosts file,
 on Windows, macOS or Linux. yt-dlp runs through a private local proxy that
@@ -19,8 +19,10 @@ If you're in the same spot, or you just want a YouTube downloader that works
 even when YouTube is blocked, you're welcome to use it. It's provided as is,
 without warranty.
 
+<br/>
+<br/>
 
-## Install
+## Installation
 
 **macOS and Linux**, in a terminal:
 
@@ -36,7 +38,7 @@ $repo = 'abhiram-ar/youtube-downloader-via-dns-over-http'
 irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 ```
 
-Both download the latest release for your system, check it against the
+> Both download the latest release for your system, check it against the
 published checksums, and install ytget. Run them again to update.
 
 With Go installed, this works too:
@@ -51,7 +53,10 @@ go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@
 ytget "https://youtu.be/..."
 ```
 
-ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
+> ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
+
+<br>
+<br>
 
 ## Settings
 
