@@ -52,6 +52,10 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
   (`store.Dirs`) drive the daily limit. Set `MINDFUL_YT_HOME` to a temp folder
   before running the binary; only `--version` is safe without it. Every other
   command, even `--help`, may move an old `ytget` folder to `mindful-yt`.
+  - **Your commands may not see the user's real AppData.** An agent's sandbox
+    can keep its own copy of `%APPDATA%` and `%LOCALAPPDATA%`, so changes
+    made there never reach the user's programs. To check or fix their real
+    data, give them commands to run in their own terminal.
 - **The guardrails are the product.** Single videos only, the daily limit and a
   reason for every download stay.
 - **Keep the proxy locked down:** `127.0.0.1` only, the per-run password, and
