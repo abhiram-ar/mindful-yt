@@ -26,7 +26,7 @@ without warranty.
 
 ## Installation
 
-**macOS and Linux**, in a terminal:
+**macOS and Linux**:
 
 ```sh
 repo=abhiram-ar/mindful-yt
@@ -46,7 +46,7 @@ irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 
 <br/>
 
-With Go installed, this works too:
+If you have Golang installed, this works too:
 
 ```sh
 go install github.com/abhiram-ar/mindful-yt/cmd/mindful-yt@latest
