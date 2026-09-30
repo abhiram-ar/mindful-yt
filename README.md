@@ -11,7 +11,7 @@ Single videos only, a daily limit, and a reason for every download.
 
 This is personal software, built to solve a problem of my own. I kept losing
 hours to YouTube, so I blocked it in my OS's DNS resolver (pointing
-youtube.com to 0.0.0.0). But friends, and articles I read, still recommend
+youtube.com to 0.0.0.0). But friends and articles I read, still recommend
 videos worth watching. ytget solves this: it downloads only the one video I ask
 for and leaves the block in place, so I can watch what matters without getting
 pulled back into the feed.
@@ -60,7 +60,7 @@ ytget "https://youtu.be/..."
 
 <br/>
 
-## Settings
+### Settings
 
 ytget creates `config.json` on first run, next to your download history, in:
 
