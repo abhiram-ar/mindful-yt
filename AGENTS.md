@@ -60,6 +60,14 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
   `ytget-done` lines, which `Download`, `parseProgress` and `parseDone` parse.
 - **The TUI needs a real terminal.** Test it through `Update` and `View()`, as
   `internal/tui/tui_test.go` does.
+- **Commit and push only when the user asks.** Stage files by name and
+  `git fetch` first, because the user edits and commits too.
+- **The README is the user's.** Keep it minimal and user-facing. The
+  disclaimer is in their own words: fix typos, but show any rewording before
+  pushing.
+- **Write down what matters before your context runs out.** Before a session
+  is compacted or ends, save critical decisions and open items: rules
+  everyone needs go here, background and status go in a worklog.
 
 Background and past decisions are in `.agents/worklogs/`. Put less important
 context there too, one file per feature, named
