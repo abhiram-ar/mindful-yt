@@ -12,7 +12,12 @@ from `main`, so changes to them ship on push. Binaries ship when a `v*` tag
 is pushed: `.github/workflows/release.yml` runs GoReleaser
 (`.goreleaser.yaml`). The scripts rely on the release file names having no
 version in them (`mindful-yt_<os>_<arch>.tar.gz`, `.zip` on Windows, plus
-`checksums.txt`). `go install ...@latest` builds the head of `main`.
+`checksums.txt`). `go install ...@latest` builds the newest `v*` tag, not
+`main`, so it too updates only when a tag is pushed.
+
+Test `install.ps1` the way users run it: pasted at a prompt
+(`$lines | powershell -Command -`), where PSReadLine is loaded. A `-File` run
+doesn't load PSReadLine, so it misses the bugs PSReadLine causes.
 
 ```sh
 gofmt -l .      # must print nothing

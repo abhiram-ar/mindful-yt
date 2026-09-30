@@ -20,15 +20,20 @@
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
     $repo = 'abhiram-ar/mindful-yt'
-    try {
-        $cpu = [string][Runtime.InteropServices.RuntimeInformation]::OSArchitecture
-    } catch {
-        $cpu = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
-    }
+    # The machine's CPU, as the registry records it: right even in a 32-bit or
+    # emulated PowerShell. Not [RuntimeInformation]::OSArchitecture: in every
+    # interactive session PSReadLine brings its own RuntimeInformation type,
+    # which has no OSArchitecture, and PowerShell picks that one.
+    $system = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+    $cpu = @(
+        (Get-ItemProperty -LiteralPath $system -Name PROCESSOR_ARCHITECTURE -ErrorAction SilentlyContinue).PROCESSOR_ARCHITECTURE,
+        $env:PROCESSOR_ARCHITEW6432,
+        $env:PROCESSOR_ARCHITECTURE
+    ) | Where-Object { $_ } | Select-Object -First 1
     $arch = switch ($cpu) {
-        { $_ -in 'X64', 'AMD64' } { 'amd64' }
-        { $_ -in 'Arm64', 'ARM64' } { 'arm64' }
-        default { throw "mindful-yt install: unsupported CPU $cpu" }
+        'AMD64' { 'amd64' }
+        'ARM64' { 'arm64' }
+        default { throw "mindful-yt install: there's no mindful-yt build for this CPU ($cpu); there are builds for 64-bit Intel/AMD and ARM" }
     }
 
     $version = if ($env:MINDFUL_YT_VERSION) { $env:MINDFUL_YT_VERSION } else { 'latest' }
