@@ -20,7 +20,6 @@ even when YouTube is blocked, you're welcome to use it. It's provided as is,
 without warranty.
 
 <br/>
-<br/>
 
 ## Installation
 
@@ -30,6 +29,7 @@ without warranty.
 repo=abhiram-ar/youtube-downloader-via-dns-over-http
 curl -fsSL "https://raw.githubusercontent.com/$repo/main/install.sh" | sh
 ```
+<br/>
 
 **Windows**, in PowerShell:
 
@@ -41,11 +41,14 @@ irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 > Both download the latest release for your system, check it against the
 published checksums, and install ytget. Run them again to update.
 
+<br/>
+
 With Go installed, this works too:
 
 ```sh
 go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@latest
 ```
+<br/>
 
 ## Usage
 
@@ -55,8 +58,7 @@ ytget "https://youtu.be/..."
 
 > ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
 
-<br>
-<br>
+<br/>
 
 ## Settings
 
