@@ -1,4 +1,4 @@
-## ytget
+# ytget
 
 Download a single YouTube video when YouTube's DNS is blocked, on Windows,
 macOS or Linux. ytget runs yt-dlp through a private local proxy that looks
@@ -53,14 +53,13 @@ go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@
 ## Usage
 
 ```sh
-ytget "https://youtu.be/..."
+ytget "https://youtu.be/dQw4w9WgXcQ"
 ```
 
 > ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
 
-<br/>
 
-### Settings
+## Settings
 
 ytget creates `config.json` on first run, next to your download history, in:
 
