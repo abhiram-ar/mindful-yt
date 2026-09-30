@@ -19,7 +19,6 @@ If you're in the same spot, or you just want a YouTube downloader that works
 even when YouTube is blocked, you're welcome to use it. It's provided as is,
 without warranty.
 
-<br/>
 
 ## Installation
 
@@ -48,7 +47,7 @@ With Go installed, this works too:
 ```sh
 go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@latest
 ```
-<br/>
+
 
 ## Usage
 
