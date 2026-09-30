@@ -20,7 +20,6 @@ even when YouTube is blocked, you're welcome to use it. It's provided as is,
 without warranty.
 
 
-
 ## Install
 
 Needs [Go](https://go.dev/dl/).
@@ -29,7 +28,7 @@ Needs [Go](https://go.dev/dl/).
 go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@latest
 ```
 
-## Use
+## Usage
 
 ```sh
 ytget "https://youtu.be/..."
@@ -40,6 +39,7 @@ ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
 ## Settings
 
 ytget creates `config.json` on first run, next to your download history, in:
+
 - **Windows:** `%APPDATA%\ytget`
 - **macOS:** `~/Library/Application Support/ytget`
 - **Linux:** `~/.config/ytget`

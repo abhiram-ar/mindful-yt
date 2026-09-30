@@ -45,9 +45,9 @@ func TestFinishedStreamStaysGreenAndTheNextAppearsBelow(t *testing.T) {
 	m = update(m, ytdlp.Progress{Part: 1, Parts: 2, FormatID: "137", Done: 50 << 20, Total: 100 << 20})
 
 	lines := strings.Split(m.View().Content, "\n")
-	video, audio, total := lineWith(lines, "Video 1080p"), lineWith(lines, "Audio"), lineWith(lines, "Total")
-	if video < 0 || audio >= 0 || total < 0 {
-		t.Fatalf("while the video downloads, want only a video row and a total:\n%s", m.View().Content)
+	video, audio := lineWith(lines, "Video 1080p"), lineWith(lines, "Audio")
+	if video < 0 || audio >= 0 {
+		t.Fatalf("while the video downloads, want only the video row:\n%s", m.View().Content)
 	}
 	if strings.Contains(lines[video], "38;5;42") {
 		t.Error("the unfinished video bar is already green")
@@ -56,9 +56,12 @@ func TestFinishedStreamStaysGreenAndTheNextAppearsBelow(t *testing.T) {
 	m = update(m, ytdlp.Progress{Part: 1, Parts: 2, FormatID: "137", Done: 100 << 20, Total: 100 << 20, Finished: true})
 	m = update(m, ytdlp.Progress{Part: 2, Parts: 2, FormatID: "140", Done: 1 << 20, Total: 4 << 20})
 	lines = strings.Split(m.View().Content, "\n")
-	video, audio, total = lineWith(lines, "Video 1080p"), lineWith(lines, "Audio"), lineWith(lines, "Total")
-	if video < 0 || audio < 0 || !(video < audio && audio < total) {
-		t.Fatalf("want the video row, then audio below it, then the total:\n%s", m.View().Content)
+	video, audio = lineWith(lines, "Video 1080p"), lineWith(lines, "Audio")
+	if video < 0 || audio < 0 || video > audio {
+		t.Fatalf("want the video row, then audio below it:\n%s", m.View().Content)
+	}
+	if lineWith(lines, "Total") >= 0 {
+		t.Errorf("there should be no total row:\n%s", m.View().Content)
 	}
 	if !strings.Contains(lines[video], "38;5;42") || !strings.Contains(lines[video], "100%") {
 		t.Errorf("the finished video row isn't a full green bar: %q", lines[video])

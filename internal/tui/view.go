@@ -115,14 +115,14 @@ func (m model) View() tea.View {
 }
 
 // partsView draws a row for each stream that has started. A finished stream
-// stays on screen with a green bar, and the next one appears below it. With
-// more than one stream there's a total underneath. It also returns the overall
-// fraction done, and whether every stream is in and yt-dlp is finishing up.
+// stays on screen with a green bar, and the next one appears below it. It
+// also returns the overall fraction done, for the terminal's tab or taskbar,
+// and whether every stream is in and yt-dlp is finishing up.
 func (m model) partsView() (rows string, overall float64, finishing bool) {
 	if len(m.parts) == 0 || !m.parts[0].started {
 		return m.spin.View() + " Starting the download...\n", 0, false
 	}
-	labelWidth := lipgloss.Width("Total")
+	labelWidth := 0
 	for _, p := range m.parts {
 		labelWidth = max(labelWidth, lipgloss.Width(p.label))
 	}
@@ -159,13 +159,6 @@ func (m model) partsView() (rows string, overall float64, finishing bool) {
 		overall = (finished + fraction(current.prog.Done, cmp.Or(current.prog.Total, current.size))) / float64(len(m.parts))
 	} else {
 		overall = finished / float64(len(m.parts))
-	}
-	if len(m.parts) > 1 && totalKnown {
-		bar := m.bar
-		if finishing {
-			bar = m.doneBar
-		}
-		b.WriteString(m.fit(pad("Total", labelWidth)+barView(bar, overall, barWidth)) + "\n")
 	}
 	if finishing {
 		label := "Finishing up..."
