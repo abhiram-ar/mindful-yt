@@ -25,13 +25,15 @@ without warranty.
 **macOS and Linux**, in a terminal:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/abhiram-ar/youtube-downloader-via-dns-over-http/main/install.sh | sh
+repo=abhiram-ar/youtube-downloader-via-dns-over-http
+curl -fsSL "https://raw.githubusercontent.com/$repo/main/install.sh" | sh
 ```
 
 **Windows**, in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/abhiram-ar/youtube-downloader-via-dns-over-http/main/install.ps1 | iex
+$repo = 'abhiram-ar/youtube-downloader-via-dns-over-http'
+irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 ```
 
 Both download the latest release for your system, check it against the
