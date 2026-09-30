@@ -1,4 +1,4 @@
-// Package deps finds the programs ytget relies on (yt-dlp, a JavaScript
+// Package deps finds the programs mindful-yt relies on (yt-dlp, a JavaScript
 // runtime and ffmpeg) and knows how to install each one on this OS.
 package deps
 
@@ -16,20 +16,20 @@ import (
 	"strings"
 )
 
-// Dependency is a program ytget needs.
+// Dependency is a program mindful-yt needs.
 type Dependency struct {
 	Name   string
 	Why    string
 	Manual string // how to get it by hand
-	// How ytget installs it on this OS. At most one is set; neither means by hand.
-	Download func(ctx context.Context, progress func(done, total int64)) error // ytget fetches it itself
+	// How mindful-yt installs it on this OS. At most one is set; neither means by hand.
+	Download func(ctx context.Context, progress func(done, total int64)) error // mindful-yt fetches it itself
 	Command  []string                                                          // an installer to run in the terminal
 }
 
-// YtdlpPath is where ytget keeps its own yt-dlp.
+// YtdlpPath is where mindful-yt keeps its own yt-dlp.
 func YtdlpPath(tools string) string { return filepath.Join(tools, exe("yt-dlp")) }
 
-// DenoPath is where ytget keeps Deno when it installs it. yt-dlp finds it
+// DenoPath is where mindful-yt keeps Deno when it installs it. yt-dlp finds it
 // there because ytdlp.Command puts the tools folder first on yt-dlp's PATH.
 func DenoPath(tools string) string { return filepath.Join(tools, exe("deno")) }
 
@@ -40,7 +40,7 @@ func exe(name string) string {
 	return name
 }
 
-// Missing lists what isn't installed. tools is ytget's tools folder.
+// Missing lists what isn't installed. tools is mindful-yt's tools folder.
 func Missing(tools string) []Dependency {
 	var missing []Dependency
 	if _, err := os.Stat(YtdlpPath(tools)); err != nil {
@@ -112,7 +112,7 @@ var linuxPackageManagers = []struct {
 }
 
 // ffmpegInstallCommand picks this OS's package manager, or returns nil when
-// there's none ytget knows how to use.
+// there's none mindful-yt knows how to use.
 func ffmpegInstallCommand(goos string, lookPath func(string) (string, error), root bool) []string {
 	has := func(name string) bool { _, err := lookPath(name); return err == nil }
 	switch goos {
@@ -165,7 +165,7 @@ var jsRuntimes = []jsRuntime{
 }
 
 // FindJSRuntime returns e.g. "node 24.17" for a runtime yt-dlp can use, on
-// PATH or in ytget's tools folder, or "" if there's none.
+// PATH or in mindful-yt's tools folder, or "" if there's none.
 func FindJSRuntime(tools string) string {
 	for _, rt := range jsRuntimes {
 		var candidates []string

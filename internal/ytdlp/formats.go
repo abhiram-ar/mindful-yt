@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// VideoInfo is the part of yt-dlp's -J output that ytget uses.
+// VideoInfo is the part of yt-dlp's -J output that mindful-yt uses.
 type VideoInfo struct {
 	ID       string   `json:"id"`
 	Title    string   `json:"title"`

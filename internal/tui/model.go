@@ -1,4 +1,4 @@
-// Package tui is ytget's terminal interface, built on Bubble Tea: paste a
+// Package tui is mindful-yt's terminal interface, built on Bubble Tea: paste a
 // link, pick a resolution, say why you're watching, and watch it download.
 package tui
 
@@ -16,9 +16,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
+	"github.com/abhiram-ar/mindful-yt/internal/store"
+	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
 
 // Options come from the command line; each one that's set skips a screen.
@@ -26,7 +26,7 @@ type Options struct {
 	URL       string
 	Quality   int    // 0: pick on screen
 	Reason    string // "": ask on screen
-	CheckOnly bool   // only check for (and offer to install) the tools ytget needs
+	CheckOnly bool   // only check for (and offer to install) the tools mindful-yt needs
 }
 
 // App is what the interface works with.
@@ -35,7 +35,7 @@ type App struct {
 	Store    store.Store
 	Config   store.Config
 	Entries  []store.Entry
-	Tools    string // ytget's tools folder: its own yt-dlp, and Deno if it installed one
+	Tools    string // mindful-yt's tools folder: its own yt-dlp, and Deno if it installed one
 	ProxyURL string // the private proxy yt-dlp goes through
 }
 
@@ -59,7 +59,7 @@ const (
 	stageSaved                    // already saved: play a copy or get another resolution
 	stageBusy                     // spinner while checking tools or looking the video up
 	stageDeps                     // tools are missing: offer to install them
-	stageInstalling               // ytget downloading yt-dlp or Deno
+	stageInstalling               // mindful-yt downloading yt-dlp or Deno
 	stagePick                     // choose a resolution
 	stageReason                   // say why you're watching
 	stageDownloading              // progress bars
@@ -119,7 +119,7 @@ type model struct {
 	missing           []deps.Dependency
 	queue             []deps.Dependency
 	triedInstall      bool
-	installing        string // what ytget is downloading
+	installing        string // what mindful-yt is downloading
 	installed, needed int64
 
 	info       ytdlp.VideoInfo
@@ -289,7 +289,7 @@ func (m model) handleKey(msg tea.KeyPressMsg) (model, tea.Cmd) {
 			m.queue, m.triedInstall = m.missing, true
 			return m.installNext()
 		case "esc", "q":
-			return m.quit(bad.Render("ytget can't download without these."), 1)
+			return m.quit(bad.Render("mindful-yt can't download without these."), 1)
 		}
 
 	case stagePick:

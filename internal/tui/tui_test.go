@@ -9,8 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
+	"github.com/abhiram-ar/mindful-yt/internal/store"
+	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
 
 const testID = "jNQXAC9IVRw"
@@ -20,7 +20,7 @@ func testApp(t *testing.T, cfg store.Config, entries []store.Entry) *App {
 	dir := t.TempDir()
 	return &App{
 		Ctx: context.Background(), Store: store.Store{Dir: dir}, Config: cfg, Entries: entries,
-		Tools: filepath.Join(dir, "tools"), ProxyURL: "http://ytget:x@127.0.0.1:1",
+		Tools: filepath.Join(dir, "tools"), ProxyURL: "http://mindful-yt:x@127.0.0.1:1",
 	}
 }
 

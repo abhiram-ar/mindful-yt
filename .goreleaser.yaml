@@ -1,13 +1,13 @@
-# Builds ytget for Windows, macOS and Linux and publishes a GitHub release.
+# Builds mindful-yt for Windows, macOS and Linux and publishes a GitHub release.
 # Runs from .github/workflows/release.yml when a v* tag is pushed.
 # Try it locally with: goreleaser release --snapshot --clean
 version: 2
 
-project_name: ytget
+project_name: mindful-yt
 
 builds:
-  - main: ./cmd/ytget
-    binary: ytget
+  - main: ./cmd/mindful-yt
+    binary: mindful-yt
     env:
       - CGO_ENABLED=0
     goos: [windows, darwin, linux]

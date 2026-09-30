@@ -10,8 +10,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/human"
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
+	"github.com/abhiram-ar/mindful-yt/internal/human"
 )
 
 var (
@@ -27,8 +27,8 @@ func (m model) View() tea.View {
 		return tea.NewView("")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  %s\n\n", accent.Render("ytget"),
-		faint.Render(fmt.Sprintf("%d/%d downloads today", m.usedToday(), m.app.Config.DailyLimit)))
+	b.WriteString(m.fit(accent.Render("mindful-yt")+"  "+
+		faint.Render(fmt.Sprintf("%d/%d downloads today", m.usedToday(), m.app.Config.DailyLimit))) + "\n\n")
 	if m.quitting {
 		b.WriteString(m.final + "\n")
 		return tea.NewView(b.String())
@@ -54,12 +54,12 @@ func (m model) View() tea.View {
 		b.WriteString(m.spin.View() + " " + m.busyLabel + "\n")
 
 	case stageDeps:
-		b.WriteString("ytget needs some tools that aren't installed:\n\n")
+		b.WriteString("mindful-yt needs some tools that aren't installed:\n\n")
 		for _, d := range m.missing {
 			how := "install it yourself: " + d.Manual
 			switch {
 			case d.Download != nil:
-				how = "ytget downloads the official build from GitHub and checks its checksum"
+				how = "mindful-yt downloads the official build from GitHub and checks its checksum"
 			case d.Command != nil:
 				how = "runs: " + deps.CommandLine(d.Command)
 			}

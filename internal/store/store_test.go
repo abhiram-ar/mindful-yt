@@ -43,11 +43,11 @@ func TestBrokenConfigIsReported(t *testing.T) {
 }
 
 func TestOutputPathsExpand(t *testing.T) {
-	t.Setenv("YTGET_TEST_DIR", `C:\Users\someone`)
-	if got := expandPath(`%YTGET_TEST_DIR%\Videos`); got != `C:\Users\someone\Videos` {
+	t.Setenv("MINDFUL_YT_TEST_DIR", `C:\Users\someone`)
+	if got := expandPath(`%MINDFUL_YT_TEST_DIR%\Videos`); got != `C:\Users\someone\Videos` {
 		t.Errorf("got %q", got)
 	}
-	if got := expandPath(`%YTGET_NOT_SET%\x`); got != `%YTGET_NOT_SET%\x` {
+	if got := expandPath(`%MINDFUL_YT_NOT_SET%\x`); got != `%MINDFUL_YT_NOT_SET%\x` {
 		t.Errorf("unknown variable changed: %q", got)
 	}
 	home, _ := os.UserHomeDir()
@@ -123,8 +123,53 @@ func TestSavedCopiesAreOnePerResolutionNewestFirst(t *testing.T) {
 	}
 }
 
-func TestYtgetHomeKeepsEverythingTogether(t *testing.T) {
-	t.Setenv("YTGET_HOME", `C:\somewhere`)
+func TestOldYtgetFolderMovesToTheNewName(t *testing.T) {
+	base := t.TempDir()
+	old := filepath.Join(base, "ytget")
+	os.MkdirAll(old, 0o755)
+	os.WriteFile(filepath.Join(old, "history.jsonl"), []byte("today's downloads\n"), 0o644)
+
+	dir := adopt(base)
+	if dir != filepath.Join(base, "mindful-yt") {
+		t.Fatalf("got %q", dir)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "history.jsonl")); string(got) != "today's downloads\n" {
+		t.Errorf("history didn't carry over: %q", got)
+	}
+	if _, err := os.Stat(old); err == nil {
+		t.Error("the old folder is still there")
+	}
+}
+
+func TestExistingFolderIsNeverReplaced(t *testing.T) {
+	base := t.TempDir()
+	for _, name := range []string{"ytget", "mindful-yt"} {
+		os.MkdirAll(filepath.Join(base, name), 0o755)
+		os.WriteFile(filepath.Join(base, name, "config.json"), []byte(name), 0o644)
+	}
+	if dir := adopt(base); dir != filepath.Join(base, "mindful-yt") {
+		t.Fatalf("got %q", dir)
+	}
+	if got, _ := os.ReadFile(filepath.Join(base, "mindful-yt", "config.json")); string(got) != "mindful-yt" {
+		t.Errorf("the new folder was overwritten: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(base, "ytget")); err != nil {
+		t.Error("the old folder was touched even though the new one exists")
+	}
+}
+
+func TestFreshInstallCreatesNothing(t *testing.T) {
+	base := t.TempDir()
+	if dir := adopt(base); dir != filepath.Join(base, "mindful-yt") {
+		t.Fatalf("got %q", dir)
+	}
+	if entries, _ := os.ReadDir(base); len(entries) != 0 {
+		t.Errorf("adopt created %v", entries)
+	}
+}
+
+func TestMindfulYtHomeKeepsEverythingTogether(t *testing.T) {
+	t.Setenv("MINDFUL_YT_HOME", `C:\somewhere`)
 	data, tools, err := Dirs()
 	if err != nil || data != `C:\somewhere` || tools != `C:\somewhere` {
 		t.Errorf("got %q, %q, %v", data, tools, err)

@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/platform"
+	"github.com/abhiram-ar/mindful-yt/internal/platform"
 )
 
 // baseArgs are the options every yt-dlp run gets.
@@ -45,7 +45,7 @@ func Command(ctx context.Context, path, proxyURL string, args ...string) *exec.C
 	// "--config-locations -" makes yt-dlp read as a config file.
 	cmd.Stdin = strings.NewReader("--proxy " + proxyURL + "\n")
 	// PYTHONUTF8 keeps non-ASCII titles intact in piped output. yt-dlp's folder
-	// goes first on its PATH so it finds the Deno ytget may have put there.
+	// goes first on its PATH so it finds the Deno mindful-yt may have put there.
 	cmd.Env = append(os.Environ(), "PYTHONUTF8=1",
 		"PATH="+filepath.Dir(path)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// yt-dlp starts a Python child, which starts the JS runtime and ffmpeg: stop them all.
@@ -56,7 +56,7 @@ func Command(ctx context.Context, path, proxyURL string, args ...string) *exec.C
 }
 
 // Wait blocks until every yt-dlp that Probe or Download started has exited,
-// or until timeout. Call it after cancelling their context, so ytget doesn't
+// or until timeout. Call it after cancelling their context, so mindful-yt doesn't
 // exit while one is still being stopped.
 func Wait(timeout time.Duration) {
 	for deadline := time.Now().Add(timeout); running.Load() > 0 && time.Now().Before(deadline); {
@@ -108,11 +108,11 @@ func DownloadArgs(infoJSON, outputDir string, res int) []string {
 		// simulate, so switch the download and its progress back on. Five
 		// progress lines a second is plenty for the screen.
 		"--no-simulate", "--progress", "--newline", "--progress-delta", "0.2",
-		"--progress-template", "download:ytget-progress %(progress.status)s %(info.format_id)s " +
+		"--progress-template", "download:mindful-yt-progress %(progress.status)s %(info.format_id)s " +
 			"%(progress.downloaded_bytes)s %(progress.total_bytes)s " +
 			"%(progress.total_bytes_estimate)s %(progress.speed)s %(progress.eta)s",
-		"--print", "before_dl:ytget-formats %(format_id)s",
-		"--print", "after_move:ytget-done %(height)s %(filepath)s",
+		"--print", "before_dl:mindful-yt-formats %(format_id)s",
+		"--print", "after_move:mindful-yt-done %(height)s %(filepath)s",
 	}
 }
 
@@ -169,10 +169,10 @@ func Download(ctx context.Context, path, proxyURL string, args []string, events 
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r")
 		switch {
-		case strings.HasPrefix(line, "ytget-formats "):
-			formats = strings.Split(strings.TrimPrefix(line, "ytget-formats "), "+")
+		case strings.HasPrefix(line, "mindful-yt-formats "):
+			formats = strings.Split(strings.TrimPrefix(line, "mindful-yt-formats "), "+")
 			send(Selected{Formats: formats})
-		case strings.HasPrefix(line, "ytget-progress "):
+		case strings.HasPrefix(line, "mindful-yt-progress "):
 			p, ok := parseProgress(line, formats)
 			switch {
 			case !ok:
@@ -184,7 +184,7 @@ func Download(ctx context.Context, path, proxyURL string, args []string, events 
 				default:
 				}
 			}
-		case strings.HasPrefix(line, "ytget-done "):
+		case strings.HasPrefix(line, "mindful-yt-done "):
 			result.Height, result.Path = parseDone(line)
 		}
 	}
@@ -201,7 +201,7 @@ func Download(ctx context.Context, path, proxyURL string, args []string, events 
 
 func parseProgress(line string, formats []string) (Progress, bool) {
 	// status format_id downloaded total estimate speed eta
-	f := strings.Fields(strings.TrimPrefix(line, "ytget-progress "))
+	f := strings.Fields(strings.TrimPrefix(line, "mindful-yt-progress "))
 	if len(f) != 7 {
 		return Progress{}, false
 	}
@@ -218,7 +218,7 @@ func parseProgress(line string, formats []string) (Progress, bool) {
 }
 
 func parseDone(line string) (height int, path string) {
-	rest := strings.TrimPrefix(line, "ytget-done ")
+	rest := strings.TrimPrefix(line, "mindful-yt-done ")
 	h, path, _ := strings.Cut(rest, " ")
 	height, _ = strconv.Atoi(h)
 	return height, path

@@ -1,4 +1,4 @@
-// Package proxy runs a private HTTP proxy that exists only while ytget runs;
+// Package proxy runs a private HTTP proxy that exists only while mindful-yt runs;
 // yt-dlp is pointed at it with --proxy. It looks blocked YouTube hostnames up
 // over DNS-over-HTTPS and relays bytes. TLS stays end to end between yt-dlp
 // and YouTube, so the proxy never sees the traffic itself. A random password
@@ -38,8 +38,8 @@ func Start(lookup LookupFunc) (*Proxy, error) {
 	}
 	password := hex.EncodeToString(secret)
 	p := &Proxy{
-		url:    "http://ytget:" + password + "@" + listener.Addr().String(),
-		auth:   "Basic " + base64.StdEncoding.EncodeToString([]byte("ytget:"+password)),
+		url:    "http://mindful-yt:" + password + "@" + listener.Addr().String(),
+		auth:   "Basic " + base64.StdEncoding.EncodeToString([]byte("mindful-yt:"+password)),
 		dialer: net.Dialer{Timeout: 15 * time.Second},
 		lookup: lookup,
 	}
@@ -55,7 +55,7 @@ func (p *Proxy) Close() error { return p.server.Close() }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if subtle.ConstantTimeCompare([]byte(r.Header.Get("Proxy-Authorization")), []byte(p.auth)) != 1 {
-		w.Header().Set("Proxy-Authenticate", `Basic realm="ytget"`)
+		w.Header().Set("Proxy-Authenticate", `Basic realm="mindful-yt"`)
 		http.Error(w, "proxy authentication required", http.StatusProxyAuthRequired)
 		return
 	}

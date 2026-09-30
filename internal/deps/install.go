@@ -163,7 +163,7 @@ func downloadVerified(ctx context.Context, url, dir, want string, progress func(
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	// A download that was cancelled when ytget quit can leave its temp file behind.
+	// A download that was cancelled when mindful-yt quit can leave its temp file behind.
 	for _, pattern := range []string{"download-*.part", "extract-*.part"} {
 		stale, _ := filepath.Glob(filepath.Join(dir, pattern))
 		for _, f := range stale {

@@ -10,25 +10,25 @@ import (
 )
 
 func TestParseProgress(t *testing.T) {
-	p, ok := parseProgress("ytget-progress downloading 140 1048576 NA 4194304 2097152.5 2", []string{"299", "140"})
+	p, ok := parseProgress("mindful-yt-progress downloading 140 1048576 NA 4194304 2097152.5 2", []string{"299", "140"})
 	want := Progress{Part: 2, Parts: 2, FormatID: "140", Done: 1048576, Total: 4194304, Speed: 2097152.5, ETA: 2}
 	if !ok || p != want {
 		t.Errorf("got %+v, %v", p, ok)
 	}
-	if _, ok := parseProgress("ytget-progress garbage", nil); ok {
+	if _, ok := parseProgress("mindful-yt-progress garbage", nil); ok {
 		t.Error("garbage was accepted")
 	}
 }
 
 func TestParseDoneKeepsSpacesInPath(t *testing.T) {
-	h, path := parseDone(`ytget-done 1080 C:\Videos\Tom & Jerry [abc] 1080p.mp4`)
+	h, path := parseDone(`mindful-yt-done 1080 C:\Videos\Tom & Jerry [abc] 1080p.mp4`)
 	if h != 1080 || path != `C:\Videos\Tom & Jerry [abc] 1080p.mp4` {
 		t.Errorf("got %d, %q", h, path)
 	}
 }
 
 func TestCommandKeepsTheProxyPasswordOffTheCommandLine(t *testing.T) {
-	proxyURL := "http://ytget:s3cret@127.0.0.1:1234"
+	proxyURL := "http://mindful-yt:s3cret@127.0.0.1:1234"
 	cmd := Command(context.Background(), "yt-dlp", proxyURL, "-J", "https://www.youtube.com/watch?v=x")
 	for _, arg := range cmd.Args {
 		if strings.Contains(arg, "s3cret") {

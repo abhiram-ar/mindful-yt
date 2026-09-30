@@ -1,6 +1,6 @@
 # AGENTS.md
 
-ytget downloads one YouTube video at a time while YouTube is blocked in the
+mindful-yt downloads one YouTube video at a time while YouTube is blocked in the
 hosts file. It runs yt-dlp with `--proxy` pointed at a private proxy on
 `127.0.0.1` (`internal/proxy`) that resolves YouTube over DNS-over-HTTPS. Go
 and Bubble Tea v2, on Windows, macOS and Linux.
@@ -11,7 +11,7 @@ Users install with `install.sh` / `install.ps1`, which are served straight
 from `main`, so changes to them ship on push. Binaries ship when a `v*` tag
 is pushed: `.github/workflows/release.yml` runs GoReleaser
 (`.goreleaser.yaml`). The scripts rely on the release file names having no
-version in them (`ytget_<os>_<arch>.tar.gz`, `.zip` on Windows, plus
+version in them (`mindful-yt_<os>_<arch>.tar.gz`, `.zip` on Windows, plus
 `checksums.txt`). `go install ...@latest` builds the head of `main`.
 
 ```sh
@@ -40,7 +40,7 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
 ## Rules
 
 - **Follow the standard Go project layout.**
-  - The command's entry point is `cmd/ytget/`. All other code goes in
+  - The command's entry point is `cmd/mindful-yt/`. All other code goes in
     `internal/<package>/`: extend the package that owns the concern, or add a
     new one. No Go code at the repo root.
   - Tests go next to the code, in `_test.go` files.
@@ -49,15 +49,16 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
   as `liveSetup` in `internal/ytdlp/live_test.go` does. Never edit the hosts
   file.
 - **Don't touch the user's real data.** Their settings and history
-  (`store.Dirs`) drive the daily limit. Set `YTGET_HOME` to a temp folder
-  before running the binary; only `--help` and `--history` are safe without it.
+  (`store.Dirs`) drive the daily limit. Set `MINDFUL_YT_HOME` to a temp folder
+  before running the binary; only `--version` is safe without it. Every other
+  command, even `--help`, may move an old `ytget` folder to `mindful-yt`.
 - **The guardrails are the product.** Single videos only, the daily limit and a
   reason for every download stay.
 - **Keep the proxy locked down:** `127.0.0.1` only, the per-run password, and
   CONNECT only.
-- **Change yt-dlp's output and ytget's parsing together.**
-  `ytdlp.DownloadArgs` makes yt-dlp print `ytget-progress`, `ytget-formats` and
-  `ytget-done` lines, which `Download`, `parseProgress` and `parseDone` parse.
+- **Change yt-dlp's output and mindful-yt's parsing together.**
+  `ytdlp.DownloadArgs` makes yt-dlp print `mindful-yt-progress`, `mindful-yt-formats` and
+  `mindful-yt-done` lines, which `Download`, `parseProgress` and `parseDone` parse.
 - **The TUI needs a real terminal.** Test it through `Update` and `View()`, as
   `internal/tui/tui_test.go` does.
 - **Commit and push only when the user asks.** Stage files by name and

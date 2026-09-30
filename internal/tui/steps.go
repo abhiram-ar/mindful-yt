@@ -14,11 +14,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/link"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/platform"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
+	"github.com/abhiram-ar/mindful-yt/internal/link"
+	"github.com/abhiram-ar/mindful-yt/internal/platform"
+	"github.com/abhiram-ar/mindful-yt/internal/store"
+	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
 
 func (m model) acceptLink(text string) (model, tea.Cmd) {
@@ -75,7 +75,7 @@ func (m model) depsChecked(msg depsCheckedMsg) (model, tea.Cmd) {
 		for _, d := range m.missing {
 			lines = append(lines, fmt.Sprintf("  %s: %s", d.Name, d.Manual))
 		}
-		lines = append(lines, "If an install just finished, open a new terminal and run ytget again.")
+		lines = append(lines, "If an install just finished, open a new terminal and run mindful-yt again.")
 		return m.fail(strings.Join(lines, "\n"))
 	}
 	m.stage = stageDeps
@@ -101,7 +101,7 @@ func (m model) installNext() (model, tea.Cmd) {
 	return m.checkDeps()
 }
 
-// download has ytget fetch a tool itself, showing a progress bar.
+// download has mindful-yt fetch a tool itself, showing a progress bar.
 func (m model) download(dep deps.Dependency) (model, tea.Cmd) {
 	m.stage, m.installing = stageInstalling, dep.Name
 	m.installed, m.needed = 0, 0
@@ -177,7 +177,7 @@ func (m model) acceptReason(text string) (model, tea.Cmd) {
 }
 
 func (m model) startDownload() (model, tea.Cmd) {
-	infoFile, err := os.CreateTemp("", "ytget-*.info.json")
+	infoFile, err := os.CreateTemp("", "mindful-yt-*.info.json")
 	if err == nil {
 		_, err = infoFile.Write(m.infoJSON)
 		if closeErr := infoFile.Close(); err == nil {

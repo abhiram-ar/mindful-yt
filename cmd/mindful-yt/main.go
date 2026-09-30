@@ -1,4 +1,4 @@
-// Command ytget downloads one YouTube video at a time, even with YouTube
+// Command mindful-yt downloads one YouTube video at a time, even with YouTube
 // blocked in the hosts file. yt-dlp does the downloading through a private
 // local proxy that looks YouTube up over DNS-over-HTTPS, so browsers and
 // every other app stay blocked.
@@ -22,12 +22,12 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/human"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/proxy"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/tui"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
+	"github.com/abhiram-ar/mindful-yt/internal/human"
+	"github.com/abhiram-ar/mindful-yt/internal/proxy"
+	"github.com/abhiram-ar/mindful-yt/internal/store"
+	"github.com/abhiram-ar/mindful-yt/internal/tui"
+	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
 
 var qualities = []int{144, 240, 360, 480, 720, 1080, 1440, 2160}
@@ -47,12 +47,12 @@ func currentVersion() string {
 	return version
 }
 
-const usage = `ytget: download one YouTube video from a link, even with YouTube blocked in
+const usage = `mindful-yt: download one YouTube video from a link, even with YouTube blocked in
 the hosts file. Single videos only, with a daily limit.
 
 Usage:
-  ytget [link] [-q RES] [-r REASON]
-  ytget --history | --check | --update | --version
+  mindful-yt [link] [-q RES] [-r REASON]
+  mindful-yt --history | --check | --update | --version
 
   link           a single YouTube video; asked for if left out
   -q, --quality  resolution: 144, 240, 360, 480, 720, 1080, 1440 or 2160
@@ -62,7 +62,7 @@ Usage:
   --check        check for yt-dlp, a JavaScript runtime (Deno or Node.js) and
                  ffmpeg, and offer to install whatever is missing
   --update       update yt-dlp (fixes most sudden breakages)
-  --version      print ytget's version
+  --version      print mindful-yt's version
 
 Settings and history: %s
 yt-dlp:               %s
@@ -71,18 +71,10 @@ yt-dlp:               %s
 func main() { os.Exit(run(os.Args[1:])) }
 
 func run(argv []string) int {
-	dataDir, toolsDir, err := store.Dirs()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	st := store.Store{Dir: dataDir}
-	ytdlpPath := deps.YtdlpPath(toolsDir)
-
 	var opts tui.Options
 	var qualityText string
 	var showHistory, update, showVersion bool
-	fs := flag.NewFlagSet("ytget", flag.ContinueOnError)
+	fs := flag.NewFlagSet("mindful-yt", flag.ContinueOnError)
 	fs.BoolVar(&showVersion, "version", false, "")
 	fs.StringVar(&qualityText, "q", "", "")
 	fs.StringVar(&qualityText, "quality", "", "")
@@ -91,9 +83,12 @@ func run(argv []string) int {
 	fs.BoolVar(&showHistory, "history", false, "")
 	fs.BoolVar(&update, "update", false, "")
 	fs.BoolVar(&opts.CheckOnly, "check", false, "")
-	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, st.Dir, ytdlpPath) }
+	fs.Usage = func() {
+		data, tools, _ := store.Dirs()
+		fmt.Fprintf(os.Stderr, usage, data, deps.YtdlpPath(tools))
+	}
 
-	// Accept flags before or after the link: ytget <link> -q 720.
+	// Accept flags before or after the link: mindful-yt <link> -q 720.
 	var positional []string
 	for {
 		if err := fs.Parse(argv); err != nil {
@@ -107,10 +102,17 @@ func run(argv []string) int {
 		}
 		positional, argv = append(positional, argv[0]), argv[1:]
 	}
-	if showVersion { // before any settings are read or written
-		fmt.Println("ytget", currentVersion())
+	if showVersion { // before any folder is looked up, moved or written
+		fmt.Println("mindful-yt", currentVersion())
 		return 0
 	}
+	dataDir, toolsDir, err := store.Dirs()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	st := store.Store{Dir: dataDir}
+	ytdlpPath := deps.YtdlpPath(toolsDir)
 	if len(positional) > 1 {
 		fmt.Fprintln(os.Stderr, "One link at a time. (Put quotes around links.)")
 		return 2
@@ -148,7 +150,7 @@ func run(argv []string) int {
 		return 2
 	}
 	if !term.IsTerminal(os.Stdin.Fd()) {
-		fmt.Fprintln(os.Stderr, "ytget needs an interactive terminal.")
+		fmt.Fprintln(os.Stderr, "mindful-yt needs an interactive terminal.")
 		return 2
 	}
 

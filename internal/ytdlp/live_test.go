@@ -4,7 +4,7 @@
 //
 //	go test -tags live -run Live -v ./internal/ytdlp
 //
-// They install ytget's own yt-dlp, and Deno if there's no JS runtime, on
+// They install mindful-yt's own yt-dlp, and Deno if there's no JS runtime, on
 // first run. The download test needs ffmpeg and skips without it.
 
 package ytdlp_test
@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/deps"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/proxy"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/store"
-	"github.com/abhiram-ar/youtube-downloader-via-dns-over-http/internal/ytdlp"
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
+	"github.com/abhiram-ar/mindful-yt/internal/proxy"
+	"github.com/abhiram-ar/mindful-yt/internal/store"
+	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
 
 const zoo = "https://www.youtube.com/watch?v=jNQXAC9IVRw"

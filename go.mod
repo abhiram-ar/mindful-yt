@@ -1,4 +1,4 @@
-module github.com/abhiram-ar/youtube-downloader-via-dns-over-http
+module github.com/abhiram-ar/mindful-yt
 
 go 1.27.0
 

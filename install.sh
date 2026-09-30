@@ -1,22 +1,22 @@
 #!/bin/sh
-# Installs ytget from its GitHub releases on macOS or Linux:
+# Installs mindful-yt from its GitHub releases on macOS or Linux:
 #
-#   curl -fsSL https://raw.githubusercontent.com/abhiram-ar/youtube-downloader-via-dns-over-http/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/abhiram-ar/mindful-yt/main/install.sh | sh
 #
-# It installs only the ytget binary. ytget itself offers to install yt-dlp,
+# It installs only the mindful-yt binary. mindful-yt itself offers to install yt-dlp,
 # Deno and ffmpeg the first time it runs. Run it again to update.
 #
 # Environment:
-#   YTGET_VERSION      release to install, e.g. v0.1.0 (default: the latest)
-#   YTGET_INSTALL_DIR  where to put ytget (default: ~/.local/bin)
-#   YTGET_BASE_URL     where to download from instead of GitHub (for testing)
+#   MINDFUL_YT_VERSION      release to install, e.g. v0.1.0 (default: the latest)
+#   MINDFUL_YT_INSTALL_DIR  where to put mindful-yt (default: ~/.local/bin)
+#   MINDFUL_YT_BASE_URL     where to download from instead of GitHub (for testing)
 
 set -eu
 
-repo=abhiram-ar/youtube-downloader-via-dns-over-http
+repo=abhiram-ar/mindful-yt
 
 fail() {
-	echo "ytget install: $*" >&2
+	echo "mindful-yt install: $*" >&2
 	exit 1
 }
 
@@ -54,15 +54,15 @@ main() {
 	*) fail "unsupported CPU $(uname -m)" ;;
 	esac
 
-	version=${YTGET_VERSION:-latest}
+	version=${MINDFUL_YT_VERSION:-latest}
 	if [ "$version" = latest ]; then
 		base=https://github.com/$repo/releases/latest/download
 	else
 		base=https://github.com/$repo/releases/download/$version
 	fi
-	base=${YTGET_BASE_URL:-$base}
-	dir=${YTGET_INSTALL_DIR:-$HOME/.local/bin}
-	asset=ytget_${os}_${arch}.tar.gz
+	base=${MINDFUL_YT_BASE_URL:-$base}
+	dir=${MINDFUL_YT_INSTALL_DIR:-$HOME/.local/bin}
+	asset=mindful-yt_${os}_${arch}.tar.gz
 
 	tmp=$(mktemp -d)
 	trap 'rm -rf "$tmp"' EXIT
@@ -74,16 +74,16 @@ main() {
 	[ -n "$want" ] || fail "$asset isn't listed in checksums.txt"
 	[ "$(sha256 "$tmp/$asset")" = "$want" ] || fail "$asset failed its checksum, so it wasn't installed"
 
-	tar -xzf "$tmp/$asset" -C "$tmp" ytget
+	tar -xzf "$tmp/$asset" -C "$tmp" mindful-yt
 	mkdir -p "$dir"
 	# Copy next to the target, then rename: a rename within one folder is
-	# atomic, and replaces even a copy of ytget that's running.
-	cp "$tmp/ytget" "$dir/.ytget.new"
-	chmod 755 "$dir/.ytget.new"
-	mv -f "$dir/.ytget.new" "$dir/ytget"
+	# atomic, and replaces even a copy of mindful-yt that's running.
+	cp "$tmp/mindful-yt" "$dir/.mindful-yt.new"
+	chmod 755 "$dir/.mindful-yt.new"
+	mv -f "$dir/.mindful-yt.new" "$dir/mindful-yt"
 
-	installed=$("$dir/ytget" --version) || fail "installed $dir/ytget, but it doesn't run"
-	echo "Installed $installed to $dir/ytget"
+	installed=$("$dir/mindful-yt" --version) || fail "installed $dir/mindful-yt, but it doesn't run"
+	echo "Installed $installed to $dir/mindful-yt"
 	case ":$PATH:" in
 	*":$dir:"*) ;;
 	*)
@@ -92,7 +92,7 @@ main() {
 		printf '  export PATH="%s:$PATH"\n\n' "$dir"
 		;;
 	esac
-	echo "Run ytget. It offers to install yt-dlp, Deno and ffmpeg if they're missing."
+	echo "Run mindful-yt. It offers to install yt-dlp, Deno and ffmpeg if they're missing."
 }
 
 main "$@"

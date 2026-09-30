@@ -1,5 +1,5 @@
-// Package store keeps ytget's settings (config.json) and download history
-// (history.jsonl), and knows which folders ytget uses.
+// Package store keeps mindful-yt's settings (config.json) and download history
+// (history.jsonl), and knows which folders mindful-yt uses.
 package store
 
 import (
@@ -60,10 +60,10 @@ type Entry struct {
 // Store keeps config.json and history.jsonl in one folder.
 type Store struct{ Dir string }
 
-// Dirs returns where settings and history live, and where yt-dlp.exe is
-// kept. YTGET_HOME puts both in one folder, which keeps tests apart.
+// Dirs returns where settings and history live, and where yt-dlp is kept.
+// MINDFUL_YT_HOME puts both in one folder, which keeps tests apart.
 func Dirs() (data, tools string, err error) {
-	if home := os.Getenv("YTGET_HOME"); home != "" {
+	if home := os.Getenv("MINDFUL_YT_HOME"); home != "" {
 		return home, home, nil
 	}
 	// %APPDATA%, ~/Library/Application Support, or ~/.config
@@ -76,7 +76,28 @@ func Dirs() (data, tools string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	return filepath.Join(configDir, "ytget"), filepath.Join(cacheDir, "ytget"), nil
+	return adopt(configDir), adopt(cacheDir), nil
+}
+
+// The app was called ytget before it was renamed.
+const appDir, oldAppDir = "mindful-yt", "ytget"
+
+// adopt returns base/mindful-yt. If only the old base/ytget folder exists, it
+// is renamed first, so settings, history and tools carry over. If the rename
+// fails, e.g. because a running ytget has a file open, the old folder keeps
+// being used.
+func adopt(base string) string {
+	dir, old := filepath.Join(base, appDir), filepath.Join(base, oldAppDir)
+	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+		return dir
+	}
+	if _, err := os.Stat(old); err != nil {
+		return dir
+	}
+	if err := os.Rename(old, dir); err != nil {
+		return old
+	}
+	return dir
 }
 
 func (s Store) ConfigPath() string  { return filepath.Join(s.Dir, "config.json") }

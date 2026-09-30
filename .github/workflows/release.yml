@@ -1,7 +1,7 @@
 name: release
 
 # Pushing a version tag (git tag v0.1.0 && git push origin v0.1.0) builds
-# ytget for every OS and publishes a GitHub release with the archives and
+# mindful-yt for every OS and publishes a GitHub release with the archives and
 # checksums.txt.
 on:
   push:

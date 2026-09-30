@@ -1,17 +1,21 @@
-# ytget
+# mindful-yt
 
-Download a single YouTube video when YouTube's DNS is blocked, on Windows,
-macOS or Linux. ytget runs `yt-dlp` through a
-private local proxy that looks YouTube up over DNS-over-HTTPS.
+Keep YouTube blocked on your machine, and still watch the videos that matter.
+
+mindful-yt downloads a single YouTube video even when YouTube's DNS is
+blocked, on Windows, macOS or Linux. It runs `yt-dlp` through a private
+local proxy that looks YouTube up over DNS-over-HTTPS, so your block
+stays in place.
 
 Single videos only, a daily limit, and a reason for every download.
+
 
 ## Disclaimer - AI-led project
 
 This is personal software, built to solve a problem of my own. I kept losing
 hours to YouTube, so I blocked it in my OS's DNS resolver (pointing
 youtube.com to 0.0.0.0). But friends and articles I read, still recommend
-videos worth watching. ytget solves this: it downloads only the one video I ask
+videos worth watching. mindful-yt solves this: it downloads only the one video I ask
 for and leaves the block in place, so I can watch what matters without getting
 pulled back into the feed.
 
@@ -25,7 +29,7 @@ without warranty.
 **macOS and Linux**, in a terminal:
 
 ```sh
-repo=abhiram-ar/youtube-downloader-via-dns-over-http
+repo=abhiram-ar/mindful-yt
 curl -fsSL "https://raw.githubusercontent.com/$repo/main/install.sh" | sh
 ```
 <br/>
@@ -33,40 +37,40 @@ curl -fsSL "https://raw.githubusercontent.com/$repo/main/install.sh" | sh
 **Windows**, in PowerShell:
 
 ```powershell
-$repo = 'abhiram-ar/youtube-downloader-via-dns-over-http'
+$repo = 'abhiram-ar/mindful-yt'
 irm "https://raw.githubusercontent.com/$repo/main/install.ps1" | iex
 ```
 
 > Both download the latest release for your system, check it against the
-> published checksums, and install ytget. Run them again to update.
+> published checksums, and install mindful-yt. Run them again to update.
 
 <br/>
 
 With Go installed, this works too:
 
 ```sh
-go install github.com/abhiram-ar/youtube-downloader-via-dns-over-http/cmd/ytget@latest
+go install github.com/abhiram-ar/mindful-yt/cmd/mindful-yt@latest
 ```
 
 
 ## Usage
 
 ```sh
-ytget "https://youtu.be/dQw4w9WgXcQ"
+mindful-yt "https://youtu.be/dQw4w9WgXcQ"
 ```
 
-> ytget offers to install yt-dlp, Deno and ffmpeg if they're missing.
+> mindful-yt offers to install yt-dlp, Deno and ffmpeg if they're missing.
 
 
 ## Settings
 
-ytget creates `config.json` on first run, next to your download history, in:
+mindful-yt creates `config.json` on first run, next to your download history, in:
 
-- **Windows:** `%APPDATA%\ytget`
-- **macOS:** `~/Library/Application Support/ytget`
-- **Linux:** `~/.config/ytget`
+- **Windows:** `%APPDATA%\mindful-yt`
+- **macOS:** `~/Library/Application Support/mindful-yt`
+- **Linux:** `~/.config/mindful-yt`
 
-`ytget --help` prints the exact path.
+`mindful-yt --help` prints the exact path.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
