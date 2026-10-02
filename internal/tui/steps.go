@@ -5,6 +5,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,13 +23,19 @@ import (
 )
 
 func (m model) acceptLink(text string) (model, tea.Cmd) {
+	if handle, ok := link.Handle(text); ok {
+		return m.startChannel(handle)
+	}
 	id, watch, err := link.Canonical(text)
+	if errors.Is(err, link.ErrNotYouTube) {
+		return m.startSearch(text)
+	}
 	if err != nil {
 		m.stage, m.problem = stageLink, err.Error()
 		m.link.SetValue(strings.TrimSpace(text))
 		return m, m.link.Focus()
 	}
-	m.videoID, m.watchURL = id, watch
+	m.videoID, m.watchURL, m.problem = id, watch, ""
 	m.link.Blur()
 	m.saved = store.SavedCopies(m.app.Entries, id)
 	if m.opts.Quality > 0 {
@@ -68,6 +75,8 @@ func (m model) depsChecked(msg depsCheckedMsg) (model, tea.Cmd) {
 	switch {
 	case len(m.missing) == 0 && m.opts.CheckOnly:
 		return m.quit(msg.summary, 0)
+	case len(m.missing) == 0 && m.watchURL == "":
+		return m.fetchList() // no video picked yet: the tools were checked for a search
 	case len(m.missing) == 0:
 		return m.startProbe()
 	case m.triedInstall:

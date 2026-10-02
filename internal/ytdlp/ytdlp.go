@@ -1,5 +1,6 @@
-// Package ytdlp runs yt-dlp: looking a video up, turning its formats into
-// resolution choices, and downloading while reading its progress.
+// Package ytdlp runs yt-dlp: listing videos (a search), looking one up,
+// turning its formats into resolution choices, and downloading while reading
+// its progress.
 package ytdlp
 
 import (
@@ -55,7 +56,7 @@ func Command(ctx context.Context, path, proxyURL string, args ...string) *exec.C
 	return cmd
 }
 
-// Wait blocks until every yt-dlp that Probe or Download started has exited,
+// Wait blocks until every yt-dlp that List, Probe or Download started has exited,
 // or until timeout. Call it after cancelling their context, so mindful-yt doesn't
 // exit while one is still being stopped.
 func Wait(timeout time.Duration) {
@@ -68,20 +69,30 @@ func Wait(timeout time.Duration) {
 // back too, so the download can reuse it (--load-info-json) instead of
 // asking YouTube again.
 func Probe(ctx context.Context, path, proxyURL, watchURL string) (VideoInfo, []byte, error) {
+	out, err := output(ctx, path, proxyURL, "-J", watchURL)
+	if err != nil {
+		return VideoInfo{}, nil, err
+	}
+	var info VideoInfo
+	if err := json.Unmarshal(out, &info); err != nil {
+		return VideoInfo{}, nil, fmt.Errorf("couldn't read yt-dlp's answer: %w", err)
+	}
+	return info, out, nil
+}
+
+// output runs yt-dlp and returns what it printed, or its error. It counts as
+// running until yt-dlp has exited, so Wait covers it.
+func output(ctx context.Context, path, proxyURL string, args ...string) ([]byte, error) {
 	var stdout, stderr bytes.Buffer
-	cmd := Command(ctx, path, proxyURL, "-J", watchURL)
+	cmd := Command(ctx, path, proxyURL, args...)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	running.Add(1)
 	err := cmd.Run()
 	running.Add(-1)
 	if err != nil {
-		return VideoInfo{}, nil, errorFrom(stderr.String(), err)
+		return nil, errorFrom(stderr.String(), err)
 	}
-	var info VideoInfo
-	if err := json.Unmarshal(stdout.Bytes(), &info); err != nil {
-		return VideoInfo{}, nil, fmt.Errorf("couldn't read yt-dlp's answer: %w", err)
-	}
-	return info, stdout.Bytes(), nil
+	return stdout.Bytes(), nil
 }
 
 // errorFrom turns yt-dlp's stderr into a short message: its last ERROR line.

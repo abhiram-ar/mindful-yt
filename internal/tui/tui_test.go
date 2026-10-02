@@ -193,6 +193,8 @@ func TestHelpLineListsEachScreensKeys(t *testing.T) {
 		want  string
 	}{
 		{stageLink, "enter continue · esc quit"},
+		{stageListing, "esc back"},
+		{stageResults, "↑/↓ choose · enter select · esc back · q quit"},
 		{stagePick, "↑/↓ choose · enter select · esc quit"},
 		{stageDeps, "enter install · esc quit"},
 		{stageReason, "enter start download · esc quit"},

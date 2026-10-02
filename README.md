@@ -14,10 +14,12 @@ Single videos only, a daily limit, and a reason for every download.
 
 This is personal software, built to solve a problem of my own. I kept losing
 hours to YouTube, so I blocked it in my OS's DNS resolver (pointing
-youtube.com to 0.0.0.0). But friends and articles I read, still recommend
-videos worth watching. mindful-yt solves this: it downloads only the one video I ask
-for and leaves the block in place, so I can watch what matters without getting
-pulled back into the feed.
+youtube.com to 0.0.0.0). But friends recommend videos worth watching, and
+sometimes I need a video to learn about a specific topic. `mindful-yt` solves
+this: it downloads only the one video I ask for, with no recommendations and
+leaves the block in place, so we can watch what matters without getting pulled
+back into the feed. And with a little friction before every download, we only
+end up with videos worth watching.
 
 If you're in the same spot, or you just want a YouTube downloader that works
 even when YouTube is blocked, you're welcome to use it. It's provided as is,
@@ -56,8 +58,12 @@ go install github.com/abhiram-ar/mindful-yt/cmd/mindful-yt@latest
 ## Usage
 
 ```sh
-mindful-yt "https://youtu.be/dQw4w9WgXcQ"
+mindful-yt "https://youtu.be/dQw4w9WgXcQ"   # a video link
+mindful-yt "lofi hip hop"                   # search YouTube, then pick a video
+mindful-yt @jawed                           # a channel's newest videos, then pick one
 ```
+
+Or run `mindful-yt` on its own and type any of these.
 
 > mindful-yt offers to install yt-dlp, Deno and ffmpeg if they're missing.
 
@@ -86,3 +92,4 @@ mindful-yt creates `config.json` on first run, next to your download history, in
 | `daily_limit` | `3` | How many downloads you get per day. |
 | `max_height` | `1080` | The resolution the picker highlights. |
 | `min_reason_length` | `10` | The shortest reason accepted. |
+| `search_results` | `15` | How many videos a search or a channel lists (at most 50). |

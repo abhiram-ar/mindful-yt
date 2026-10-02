@@ -38,7 +38,10 @@ func (m model) View() tea.View {
 	var taskbar *tea.ProgressBar // progress in the terminal's tab or taskbar, where supported
 	switch m.stage {
 	case stageLink:
-		b.WriteString("Paste a YouTube link:\n" + m.link.View() + "\n")
+		b.WriteString(m.fit("Paste a YouTube link, type a search, or @handle:") + "\n" + m.link.View() + "\n")
+
+	case stageResults:
+		b.WriteString(m.listView())
 
 	case stageSaved:
 		b.WriteString(bold.Render(m.fit(m.saved[0].Title)) + "\n\nYou already have this video:\n")
@@ -51,8 +54,8 @@ func (m model) View() tea.View {
 		}
 		b.WriteString(choiceRow(m.cursor, len(m.saved), "Download another resolution (counts toward today's limit)") + "\n")
 
-	case stageBusy:
-		b.WriteString(m.spin.View() + " " + m.busyLabel + "\n")
+	case stageBusy, stageListing:
+		b.WriteString(m.fit(m.spin.View()+" "+m.busyLabel) + "\n")
 
 	case stageDeps:
 		b.WriteString("mindful-yt needs some tools that aren't installed:\n\n")
@@ -103,7 +106,8 @@ func (m model) View() tea.View {
 	}
 
 	if m.problem != "" {
-		b.WriteString("\n" + bad.Render(m.problem) + "\n")
+		// Wrapped, not cut: yt-dlp's errors run long, and the end says what went wrong.
+		b.WriteString("\n" + bad.Render(ansi.Wrap(m.problem, m.lineWidth(), "")) + "\n")
 	}
 	if keys := m.bindings(); len(keys) > 0 {
 		b.WriteString("\n" + helpLine(m.lineWidth(), keys...) + "\n")
@@ -237,6 +241,13 @@ func (m model) bindings() []key.Binding {
 	switch m.stage {
 	case stageLink:
 		return []key.Binding{keyContinue, keyQuitTyping}
+	case stageListing:
+		return []key.Binding{keyBack}
+	case stageResults:
+		if m.results.Paginator.TotalPages > 1 {
+			return []key.Binding{keyChoose, keyPage, keySelect, keyBack, keyQuitList}
+		}
+		return []key.Binding{keyChoose, keySelect, keyBack, keyQuitList}
 	case stageSaved, stagePick:
 		return []key.Binding{keyChoose, keySelect, keyQuit}
 	case stageDeps:

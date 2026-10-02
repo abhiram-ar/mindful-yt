@@ -22,6 +22,7 @@ type Config struct {
 	DailyLimit      int    `json:"daily_limit"`
 	MaxHeight       int    `json:"max_height"`
 	MinReasonLength int    `json:"min_reason_length"`
+	SearchResults   int    `json:"search_results"` // how many videos a search lists
 }
 
 // DefaultConfig is written to config.json on first run.
@@ -30,7 +31,12 @@ var DefaultConfig = Config{
 	DailyLimit:      3,
 	MaxHeight:       1080,
 	MinReasonLength: 10,
+	SearchResults:   15,
 }
+
+// maxSearchResults caps search_results: each 20 or so more is another request
+// to YouTube, and a long list is more to scroll through than to choose from.
+const maxSearchResults = 50
 
 // defaultOutputDir is a YT-Saved folder where the OS keeps videos.
 func defaultOutputDir(goos string) string {
@@ -129,6 +135,10 @@ func (s Store) LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("%s is not valid JSON: %w", path, err)
 	}
 	cfg.OutputDir = expandPath(cfg.OutputDir)
+	if cfg.SearchResults < 1 {
+		cfg.SearchResults = DefaultConfig.SearchResults
+	}
+	cfg.SearchResults = min(cfg.SearchResults, maxSearchResults)
 	return cfg, nil
 }
 

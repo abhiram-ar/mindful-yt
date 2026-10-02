@@ -1,5 +1,6 @@
 // Package tui is mindful-yt's terminal interface, built on Bubble Tea: paste a
-// link, pick a resolution, say why you're watching, and watch it download.
+// link (or search for a video), pick a resolution, say why you're watching,
+// and watch it download.
 package tui
 
 import (
@@ -9,8 +10,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -24,7 +27,7 @@ import (
 
 // Options come from the command line; each one that's set skips a screen.
 type Options struct {
-	URL       string
+	URL       string // a link, or words to search YouTube for; "": ask on screen
 	Quality   int    // 0: pick on screen
 	Reason    string // "": ask on screen
 	CheckOnly bool   // only check for (and offer to install) the tools mindful-yt needs
@@ -56,7 +59,9 @@ func Run(app *App, opts Options) (int, error) {
 type stage int
 
 const (
-	stageLink        stage = iota // paste a link
+	stageLink        stage = iota // paste a link, type a search or a channel's @handle
+	stageListing                  // spinner while YouTube lists videos; esc goes back
+	stageResults                  // pick one of the listed videos
 	stageSaved                    // already saved: play a copy or get another resolution
 	stageBusy                     // spinner while checking tools or looking the video up
 	stageDeps                     // tools are missing: offer to install them
@@ -105,6 +110,7 @@ type model struct {
 	quitting  bool
 	initCmd   tea.Cmd
 	width     int  // terminal columns; 0 until the first WindowSizeMsg
+	height    int  // terminal rows; 0 until the first WindowSizeMsg
 	taskbar   bool // the terminal shows progress in its tab or taskbar
 
 	link    textinput.Model
@@ -113,6 +119,10 @@ type model struct {
 	bar     progress.Model // in progress
 	doneBar progress.Model // finished
 	cursor  int
+
+	list     videoList
+	results  list.Model // the videos to pick from
+	listings int        // numbers the fetches, so an answer to an older one is ignored
 
 	videoID, watchURL string
 	saved             []store.Entry
@@ -149,7 +159,7 @@ func newModel(app *App, opts Options) model {
 	reasonInput.SetWidth(60)
 
 	m := model{
-		app: app, opts: opts, link: linkInput, reason: reasonInput,
+		app: app, opts: opts, link: linkInput, reason: reasonInput, results: newResults(nil, time.Time{}, false),
 		spin: spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(accent)),
 		bar:  progress.New(progress.WithDefaultBlend()),
 		// One colour fills solidly only with full blocks; the default half block
@@ -208,7 +218,14 @@ func versionAtLeast(version string, want ...int) bool {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		m.width, m.height = msg.Width, msg.Height
+		// The boxes are 60 wide, or narrower to fit: the prompt and the cursor
+		// take three columns.
+		m.link.SetWidth(max(1, min(60, m.lineWidth()-3)))
+		m.reason.SetWidth(max(1, min(60, m.lineWidth()-3)))
+		if m.stage == stageResults {
+			m = m.sizeResults()
+		}
 		return m, nil
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -221,6 +238,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 	case depsCheckedMsg:
 		return m.depsChecked(msg)
+	case listedMsg:
+		return m.listed(msg)
 	case installProgressMsg:
 		m.installed, m.needed = msg.done, msg.total
 		return m, waitFor(m.events)
@@ -267,6 +286,27 @@ func (m model) handleKey(msg tea.KeyPressMsg) (model, tea.Cmd) {
 		}
 		m.problem = ""
 		return m.updateInputs(msg)
+
+	case stageListing:
+		if key.Matches(msg, keyBack) {
+			return m.backToSearch("")
+		}
+
+	case stageResults:
+		switch {
+		case key.Matches(msg, keySelect):
+			if v, ok := m.results.SelectedItem().(videoItem); ok {
+				return m.acceptLink(v.URL)
+			}
+		case key.Matches(msg, keyBack):
+			return m.backToSearch("")
+		case key.Matches(msg, keyQuitList):
+			return m.quit("", 0)
+		default: // moving and paging
+			var cmd tea.Cmd
+			m.results, cmd = m.results.Update(msg)
+			return m, cmd
+		}
 
 	case stageSaved:
 		switch {

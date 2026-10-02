@@ -34,6 +34,21 @@ func TestConfigDefaultsAreWrittenAndBOMIsAccepted(t *testing.T) {
 	}
 }
 
+func TestSearchResultsDefaultAndLimits(t *testing.T) {
+	s := Store{Dir: t.TempDir()}
+	for file, want := range map[string]int{
+		`{}`: 15, `{"search_results": 0}`: 15, `{"search_results": -3}`: 15,
+		`{"search_results": 5}`: 5, `{"search_results": 50}`: 50, `{"search_results": 500}`: 50,
+	} {
+		if err := os.WriteFile(s.ConfigPath(), []byte(file), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if cfg, err := s.LoadConfig(); err != nil || cfg.SearchResults != want {
+			t.Errorf("%s: got %d, %v; want %d", file, cfg.SearchResults, err, want)
+		}
+	}
+}
+
 func TestBrokenConfigIsReported(t *testing.T) {
 	s := Store{Dir: t.TempDir()}
 	os.WriteFile(s.ConfigPath(), []byte("{nope"), 0o644)

@@ -47,15 +47,20 @@ func currentVersion() string {
 	return version
 }
 
-const usage = `mindful-yt: download one YouTube video from a link, even with YouTube blocked in
-the hosts file. Single videos only, with a daily limit.
+const usage = `mindful-yt: download one YouTube video from a link, a search or a channel,
+even with YouTube blocked in the hosts file. Single videos only, with a daily
+limit.
 
 Usage:
-  mindful-yt [link] [-q RES] [-r REASON]
+  mindful-yt [link | @handle | search] [-q RES] [-r REASON]
   mindful-yt --history | --check | --update | --version
   mindful-yt lock-me-in
 
   link           a single YouTube video; asked for if left out
+  @handle        a channel's handle, e.g. @jawed: pick one of its newest videos
+  search         anything else: search YouTube and pick one of the videos it
+                 finds (search_results in config.json, 15 by default).
+                 Put quotes around it: mindful-yt "lofi hip hop"
   -q, --quality  resolution: 144, 240, 360, 480, 720, 1080, 1440 or 2160
                  (skips the picker; you get the best up to that)
   -r, --reason   why you're watching it (skips the question)
@@ -120,7 +125,7 @@ func run(argv []string) int {
 	st := store.Store{Dir: dataDir}
 	ytdlpPath := deps.YtdlpPath(toolsDir)
 	if len(positional) > 1 {
-		fmt.Fprintln(os.Stderr, "One link at a time. (Put quotes around links.)")
+		fmt.Fprintln(os.Stderr, `One link or search at a time. (Put quotes around it: mindful-yt "lofi hip hop")`)
 		return 2
 	}
 	if len(positional) == 1 {

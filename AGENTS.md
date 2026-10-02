@@ -26,6 +26,20 @@ go test ./...
 go test -tags live -run Live -v ./internal/ytdlp   # after changing ytdlp, proxy or deps
 ```
 
+The end-to-end check runs in a throwaway Arch Linux container
+(`test/container/`). It runs the build, the tests and the live tests, then
+drives the interface in tmux with YouTube blocked in the container's own
+hosts file. Run it after changing the interface, ytdlp or deps. Docker needs
+`sudo` on the dev machine, so give the user these to run from the repo root:
+
+```sh
+sudo docker build -t mindful-yt-check test/container   # once, and after changing the Dockerfile
+sudo docker run --rm -v "$PWD":/src:ro -v "$PWD/test/container/out":/out mindful-yt-check
+```
+
+Results are in `test/container/out/results.txt` (gitignored), with logs and
+screens next to it.
+
 ## Bubble Tea
 
 The TUI (`internal/tui`) is built on Charm's v2 modules:
@@ -41,6 +55,12 @@ go list -m -f '{{.Version}} {{.Dir}}' charm.land/bubbletea/v2   # version and so
 ```
 
 The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@<version>`.
+
+`github.com/charmbracelet/ultraviolet` (Bubble Tea's renderer) is pinned to
+`v0.0.0-20261001125412-878653296cfd`, newer than Bubble Tea v2.0.10 asks for. The older one left the top of
+a taller frame on screen whenever a screen got shorter, e.g. going back from
+the search results. Don't let a `go get` or `go mod tidy` move it back; once a
+Bubble Tea release requires that build or newer, the pin can go.
 
 ## Rules
 
@@ -70,6 +90,10 @@ The docs are also on pkg.go.dev, at `https://pkg.go.dev/charm.land/bubbletea/v2@
 - **Change yt-dlp's output and mindful-yt's parsing together.**
   `ytdlp.DownloadArgs` makes yt-dlp print `mindful-yt-progress`, `mindful-yt-formats` and
   `mindful-yt-done` lines, which `Download`, `parseProgress` and `parseDone` parse.
+  `ytdlp.listArgs` asks for one flat `-J` list (a search, or a channel's
+  Videos tab) with `approximate_date` timestamps and `-I 1:N`, which
+  `parseList` reads and `human.Ago` turns back into YouTube's "3 weeks ago".
+  Keep the `-I`: without it, a channel is paged through to its oldest video.
 - **The TUI needs a real terminal.** Test it through `Update` and `View()`, as
   `internal/tui/tui_test.go` does.
 - **Commit and push only when the user asks.** Stage files by name and

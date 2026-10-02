@@ -1,4 +1,5 @@
-// Package link checks YouTube links and reduces them to a single video.
+// Package link checks YouTube links and reduces them to a single video, and
+// recognises a channel's handle.
 package link
 
 import (
@@ -15,6 +16,9 @@ var (
 	}
 	shortHosts = map[string]bool{"youtu.be": true, "www.youtu.be": true}
 	idPrefixes = map[string]bool{"shorts": true, "live": true, "embed": true, "v": true}
+	// A YouTube handle is 3 to 30 letters (in any script), digits, "_", "-"
+	// and ".", after the "@".
+	handleRe = regexp.MustCompile(`^@[\p{L}\p{M}\p{N}_.-]{3,30}$`)
 )
 
 // The messages are shown to the user as they are.
@@ -23,6 +27,13 @@ var (
 	ErrNotSingleVideo = errors.New("Only links to a single video are allowed " +
 		"(no playlists, channels, search results or the home page).")
 )
+
+// Handle returns text as a channel's handle, "@name", if that's all it is.
+// "@name and more words" isn't a handle; it's left to be searched for.
+func Handle(text string) (string, bool) {
+	text = strings.TrimSpace(text)
+	return text, handleRe.MatchString(text)
+}
 
 // Canonical returns the video ID and a plain watch URL for a single-video
 // link. The rewrite drops list=, si= and everything else, so a link that

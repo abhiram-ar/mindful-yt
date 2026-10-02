@@ -1,6 +1,10 @@
 package link
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 const testID = "jNQXAC9IVRw"
 
@@ -45,6 +49,44 @@ func TestEverythingElseIsRefused(t *testing.T) {
 	} {
 		if _, _, err := Canonical(text); err == nil {
 			t.Errorf("%q was accepted", text)
+		}
+	}
+}
+
+// The interface searches YouTube for anything that isn't a YouTube link, and
+// refuses YouTube links that aren't to a single video, so the two errors
+// must split the way it expects.
+func TestWordsAndOtherSitesAreNotYouTube(t *testing.T) {
+	for _, text := range []string{
+		"cute cats", "@mkbhd", "", "c++ tutorial", "how to tie a tie?", "강남스타일",
+		"100% orange juice", "https://vimeo.com/123456",
+	} {
+		if _, _, err := Canonical(text); !errors.Is(err, ErrNotYouTube) {
+			t.Errorf("%q: got %v, want ErrNotYouTube", text, err)
+		}
+	}
+	for _, text := range []string{"youtube.com", "https://www.youtube.com/@someone", "https://www.youtube.com/playlist?list=PLabc"} {
+		if _, _, err := Canonical(text); !errors.Is(err, ErrNotSingleVideo) {
+			t.Errorf("%q: got %v, want ErrNotSingleVideo", text, err)
+		}
+	}
+}
+
+func TestHandles(t *testing.T) {
+	for text, want := range map[string]string{
+		"@jawed": "@jawed", "  @jawed ": "@jawed", "@MBCkpop": "@MBCkpop", "@a.b-c_d": "@a.b-c_d",
+		"@강남스타일": "@강남스타일", "@abc": "@abc", "@" + strings.Repeat("a", 30): "@" + strings.Repeat("a", 30),
+	} {
+		if got, ok := Handle(text); !ok || got != want {
+			t.Errorf("%q: got %q, %v; want %q", text, got, ok, want)
+		}
+	}
+	for _, text := range []string{
+		"@", "@ab", "@" + strings.Repeat("a", 31), "@jawed zoo", "@jawed/videos", "@@jawed",
+		"jawed", "", "https://www.youtube.com/@jawed", "@jawed?x=1",
+	} {
+		if got, ok := Handle(text); ok {
+			t.Errorf("%q was taken as the handle %q", text, got)
 		}
 	}
 }

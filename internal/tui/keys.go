@@ -12,7 +12,8 @@ var (
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
 	keyUp        = key.NewBinding(key.WithKeys("up", "k"))
 	keyDown      = key.NewBinding(key.WithKeys("down", "j"))
-	keyChoose    = key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "choose")) // labels keyUp and keyDown
+	keyChoose    = key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "choose"))  // labels keyUp and keyDown
+	keyPage      = key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "page")) // labels the list's own keys
 
 	keyContinue = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "continue"))
 	keySelect   = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select"))
@@ -26,7 +27,9 @@ var (
 	keyQuit       = key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc", "quit"))
 	keyQuitTyping = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "quit")) // q is typing here
 	keyQuitDone   = key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("q", "quit"))
+	keyQuitList   = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit")) // esc goes back here
 	keyCancel     = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
+	keyBack       = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
 )
 
 // helpLine lists what bindings do, on one faint line of at most width
