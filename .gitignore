@@ -6,3 +6,4 @@
 # Test output
 *.test
 *.out
+/test/container/out/
