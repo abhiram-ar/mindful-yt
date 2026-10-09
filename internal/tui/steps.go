@@ -112,7 +112,7 @@ func (m model) installNext() (model, tea.Cmd) {
 
 // download has mindful-yt fetch a tool itself, showing a progress bar.
 func (m model) download(dep deps.Dependency) (model, tea.Cmd) {
-	m.stage, m.installing = stageInstalling, dep.Name
+	m.stage, m.installing = stageInstalling, dep
 	m.installed, m.needed = 0, 0
 	events := make(chan any, 16)
 	m.events = events

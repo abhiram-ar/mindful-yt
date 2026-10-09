@@ -3,7 +3,7 @@
 #   irm https://raw.githubusercontent.com/abhiram-ar/mindful-yt/main/install.ps1 | iex
 #
 # It installs only mindful-yt.exe and adds its folder to your user PATH. mindful-yt
-# itself offers to install yt-dlp, Deno and ffmpeg the first time it runs.
+# itself offers to install yt-dlp, Node.js and ffmpeg the first time it runs.
 # Run it again to update.
 #
 # Environment:
@@ -96,7 +96,7 @@
                 $key.Close()
             }
         }
-        Write-Host "Run mindful-yt. It offers to install yt-dlp, Deno and ffmpeg if they're missing."
+        Write-Host "Run mindful-yt. It offers to install yt-dlp, Node.js and ffmpeg if they're missing."
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }

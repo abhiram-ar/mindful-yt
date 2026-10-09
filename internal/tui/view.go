@@ -63,7 +63,7 @@ func (m model) View() tea.View {
 			how := "install it yourself: " + d.Manual
 			switch {
 			case d.Download != nil:
-				how = "mindful-yt downloads the official build from GitHub and checks its checksum"
+				how = "mindful-yt downloads the official build from " + d.From + " and checks its checksum"
 			case d.Command != nil:
 				how = "runs: " + deps.CommandLine(d.Command)
 			}
@@ -72,7 +72,7 @@ func (m model) View() tea.View {
 
 	case stageInstalling:
 		pct := fraction(float64(m.installed), float64(m.needed))
-		fmt.Fprintf(&b, "Downloading %s from GitHub\n\n", m.installing)
+		fmt.Fprintf(&b, "Downloading %s from %s\n\n", m.installing.Name, m.installing.From)
 		b.WriteString(barView(m.bar, pct, m.lineWidth()) + "\n")
 		b.WriteString(faint.Render(human.Bytes(float64(m.installed))+" of "+human.Bytes(float64(m.needed))) + "\n")
 		taskbar = tea.NewProgressBar(tea.ProgressBarDefault, int(pct*100))

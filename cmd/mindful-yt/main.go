@@ -65,8 +65,8 @@ Usage:
                  (skips the picker; you get the best up to that)
   -r, --reason   why you're watching it (skips the question)
   --history      today's count and recent downloads
-  --check        check for yt-dlp, a JavaScript runtime (Deno or Node.js) and
-                 ffmpeg, and offer to install whatever is missing
+  --check        check for yt-dlp, Node.js and ffmpeg, and offer to install
+                 whatever is missing
   --update       update yt-dlp (fixes most sudden breakages)
   --version      print mindful-yt's version
   lock-me-in     block YouTube in this machine's hosts file (mindful-yt
@@ -123,6 +123,7 @@ func run(argv []string) int {
 		return 1
 	}
 	st := store.Store{Dir: dataDir}
+	deps.RemoveDeno(toolsDir)
 	ytdlpPath := deps.YtdlpPath(toolsDir)
 	if len(positional) > 1 {
 		fmt.Fprintln(os.Stderr, `One link or search at a time. (Put quotes around it: mindful-yt "lofi hip hop")`)

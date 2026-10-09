@@ -21,6 +21,7 @@ type Dependency struct {
 	Name   string
 	Why    string
 	Manual string // how to get it by hand
+	From   string // where Download gets it, e.g. "GitHub"
 	// How mindful-yt installs it on this OS. At most one is set; neither means by hand.
 	Download func(ctx context.Context, progress func(done, total int64)) error // mindful-yt fetches it itself
 	Command  []string                                                          // an installer to run in the terminal
@@ -29,9 +30,13 @@ type Dependency struct {
 // YtdlpPath is where mindful-yt keeps its own yt-dlp.
 func YtdlpPath(tools string) string { return filepath.Join(tools, exe("yt-dlp")) }
 
-// DenoPath is where mindful-yt keeps Deno when it installs it. yt-dlp finds it
-// there because ytdlp.Command puts the tools folder first on yt-dlp's PATH.
-func DenoPath(tools string) string { return filepath.Join(tools, exe("deno")) }
+// NodePath is where mindful-yt keeps Node.js when it installs it. yt-dlp finds
+// it there because ytdlp.Command puts the tools folder first on yt-dlp's PATH.
+func NodePath(tools string) string { return filepath.Join(tools, exe("node")) }
+
+// RemoveDeno deletes the Deno that mindful-yt installed before it moved to
+// Node.js. yt-dlp is told to use Node.js only, so it would just take up space.
+func RemoveDeno(tools string) { os.Remove(filepath.Join(tools, exe("deno"))) }
 
 func exe(name string) string {
 	if runtime.GOOS == "windows" {
@@ -58,7 +63,7 @@ func Missing(tools string) []Dependency {
 func ytdlpDependency(tools string) Dependency {
 	d := Dependency{
 		Name: "yt-dlp", Why: "it's the downloader itself",
-		Manual: "https://github.com/yt-dlp/yt-dlp/releases",
+		Manual: "https://github.com/yt-dlp/yt-dlp/releases", From: "GitHub",
 	}
 	if _, ok := ytdlpAsset(runtime.GOOS, runtime.GOARCH, isMusl()); ok {
 		d.Download = func(ctx context.Context, progress func(done, total int64)) error {
@@ -70,13 +75,14 @@ func ytdlpDependency(tools string) Dependency {
 
 func jsDependency(tools string) Dependency {
 	d := Dependency{
-		Name:   "Deno",
-		Why:    "yt-dlp runs YouTube's player code with it to unlock the videos (Node.js 22+ works too)",
-		Manual: "https://deno.com",
+		Name:   "Node.js",
+		Why:    "yt-dlp runs YouTube's player code with it to unlock the videos",
+		Manual: "version 22 or newer, from https://nodejs.org",
+		From:   "nodejs.org",
 	}
-	if _, ok := denoAsset(runtime.GOOS, runtime.GOARCH); ok && !isMusl() {
+	if _, ok := nodePlatform(runtime.GOOS, runtime.GOARCH); ok && !isMusl() {
 		d.Download = func(ctx context.Context, progress func(done, total int64)) error {
-			return InstallDeno(ctx, DenoPath(tools), progress)
+			return InstallNode(ctx, NodePath(tools), progress)
 		}
 	}
 	return d
@@ -161,19 +167,16 @@ type jsRuntime struct {
 // yt-dlp's own minimums, from yt_dlp/utils/_jsruntime.py
 var jsRuntimes = []jsRuntime{
 	{"node", regexp.MustCompile(`v(\d+)\.(\d+)`), [2]int{22, 0}},
-	{"deno", regexp.MustCompile(`deno (\d+)\.(\d+)`), [2]int{2, 3}},
 }
 
-// FindJSRuntime returns e.g. "node 24.17" for a runtime yt-dlp can use, on
-// PATH or in mindful-yt's tools folder, or "" if there's none.
+// FindJSRuntime returns e.g. "node 24.17" for a runtime yt-dlp can use, in
+// mindful-yt's tools folder or on PATH, or "" if there's none. The tools
+// folder comes first, as it does on yt-dlp's PATH.
 func FindJSRuntime(tools string) string {
 	for _, rt := range jsRuntimes {
-		var candidates []string
+		candidates := []string{filepath.Join(tools, exe(rt.name))}
 		if path, err := exec.LookPath(rt.name); err == nil {
 			candidates = append(candidates, path)
-		}
-		if rt.name == "deno" {
-			candidates = append(candidates, DenoPath(tools))
 		}
 		for _, path := range candidates {
 			out, err := exec.Command(path, "--version").Output()
@@ -202,9 +205,9 @@ func (rt jsRuntime) check(versionOutput string) (string, bool) {
 }
 
 // isMusl reports whether this is a musl Linux such as Alpine, which needs its
-// own yt-dlp build and has no official Deno build. It asks which loader the
-// system's own /bin/sh uses, because glibc systems can have the musl package
-// (and its /lib/ld-musl-* loader) installed alongside.
+// own yt-dlp build, and where mindful-yt doesn't install Node.js. It asks which
+// loader the system's own /bin/sh uses, because glibc systems can have the
+// musl package (and its /lib/ld-musl-* loader) installed alongside.
 func isMusl() bool {
 	if runtime.GOOS != "linux" {
 		return false

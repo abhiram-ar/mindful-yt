@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/abhiram-ar/mindful-yt/main/install.sh | sh
 #
 # It installs only the mindful-yt binary. mindful-yt itself offers to install yt-dlp,
-# Deno and ffmpeg the first time it runs. Run it again to update.
+# Node.js and ffmpeg the first time it runs. Run it again to update.
 #
 # Environment:
 #   MINDFUL_YT_VERSION      release to install, e.g. v0.1.0 (default: the latest)
@@ -92,7 +92,7 @@ main() {
 		printf '  export PATH="%s:$PATH"\n\n' "$dir"
 		;;
 	esac
-	echo "Run mindful-yt. It offers to install yt-dlp, Deno and ffmpeg if they're missing."
+	echo "Run mindful-yt. It offers to install yt-dlp, Node.js and ffmpeg if they're missing."
 }
 
 main "$@"

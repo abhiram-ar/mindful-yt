@@ -10,7 +10,7 @@
 # it. The scripts run from the mounted repo, so changing them needs no rebuild.
 FROM archlinux:latest
 
-# ffmpeg comes ready, so mindful-yt only installs yt-dlp and Deno itself.
+# ffmpeg comes ready, so mindful-yt only installs yt-dlp and Node.js itself.
 RUN pacman -Syu --noconfirm --needed curl tmux file go git sudo jq procps-ng ffmpeg ca-certificates
 
 # A normal user with sudo, like an Arch desktop user. No password, since

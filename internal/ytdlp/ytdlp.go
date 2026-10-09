@@ -27,7 +27,7 @@ func baseArgs() []string {
 	return []string{
 		"--ignore-config",
 		"--config-locations", "-", // the proxy, from stdin; see Command
-		"--js-runtimes", "node",
+		"--no-js-runtimes", "--js-runtimes", "node", // not Deno, yt-dlp's default
 		"--no-playlist",
 		"--encoding", "utf-8",
 	}
@@ -46,7 +46,7 @@ func Command(ctx context.Context, path, proxyURL string, args ...string) *exec.C
 	// "--config-locations -" makes yt-dlp read as a config file.
 	cmd.Stdin = strings.NewReader("--proxy " + proxyURL + "\n")
 	// PYTHONUTF8 keeps non-ASCII titles intact in piped output. yt-dlp's folder
-	// goes first on its PATH so it finds the Deno mindful-yt may have put there.
+	// goes first on its PATH so it finds the Node.js mindful-yt may have put there.
 	cmd.Env = append(os.Environ(), "PYTHONUTF8=1",
 		"PATH="+filepath.Dir(path)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// yt-dlp starts a Python child, which starts the JS runtime and ffmpeg: stop them all.

@@ -4,8 +4,8 @@
 //
 //	go test -tags live -run Live -v ./internal/ytdlp
 //
-// They install mindful-yt's own yt-dlp, and Deno if there's no JS runtime, on
-// first run. The download test needs ffmpeg and skips without it.
+// They install mindful-yt's own yt-dlp, and Node.js if there's no JS runtime,
+// on first run. The download test needs ffmpeg and skips without it.
 
 package ytdlp_test
 
@@ -44,8 +44,8 @@ func liveSetup(t *testing.T) (context.Context, string, *proxy.Proxy) {
 		}
 	}
 	if deps.FindJSRuntime(tools) == "" {
-		t.Log("installing Deno")
-		if err := deps.InstallDeno(ctx, deps.DenoPath(tools), nil); err != nil {
+		t.Log("installing Node.js")
+		if err := deps.InstallNode(ctx, deps.NodePath(tools), nil); err != nil {
 			t.Fatal(err)
 		}
 	}

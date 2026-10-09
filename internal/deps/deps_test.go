@@ -1,7 +1,9 @@
 package deps
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"errors"
 	"os"
 	"path/filepath"
@@ -21,19 +23,24 @@ func TestExpectedSum(t *testing.T) {
 	}
 }
 
-func TestDenoSumReadsBothFormats(t *testing.T) {
-	const hash = "a0c3101b4158d1dfb7d6a78a7bf0f3de80c96bb423c152beec8beb22786f2238"
-	for name, c := range map[string]struct{ text, want string }{
-		// macOS and Linux: sha256sum output.
-		"unix": {hash + "  deno-x86_64-unknown-linux-gnu.zip\n", hash},
-		// Windows: PowerShell Get-FileHash | Format-List, with CRLF.
-		"windows": {"\r\nAlgorithm : SHA256\r\nHash      : " + strings.ToUpper(hash) + "\r\n" +
-			`Path      : C:\a\deno\deno\target\release\deno-x86_64-pc-windows-msvc.zip` + "\r\n\r\n", hash},
-		"no hash":    {"Not Found", ""},
-		"two hashes": {hash + "\n" + strings.Repeat("b", 64) + "\n", ""},
+func TestNewestLTSSkipsCurrentReleases(t *testing.T) {
+	// The shape of https://nodejs.org/dist/index.json, newest first.
+	const index = `[
+		{"version":"v26.11.1","date":"2026-10-01","files":["linux-x64"],"lts":false},
+		{"version":"v24.21.0","date":"2026-09-08","files":["linux-x64"],"lts":"Krypton"},
+		{"version":"v22.30.0","date":"2026-09-01","files":["linux-x64"],"lts":"Jod"}
+	]`
+	if got, err := newestLTS(strings.NewReader(index)); err != nil || got != "v24.21.0" {
+		t.Errorf("got %q, %v", got, err)
+	}
+	for name, bad := range map[string]string{
+		"no LTS":      `[{"version":"v26.11.1","lts":false}]`,
+		"odd version": `[{"version":"../../evil","lts":"Krypton"}]`,
+		"not a list":  `{"version":"v24.21.0","lts":"Krypton"}`,
+		"cut short":   `[{"version":"v26.11.1","lts":false},{"vers`,
 	} {
-		if got := denoSum(c.text); got != c.want {
-			t.Errorf("%s: got %q, want %q", name, got, c.want)
+		if got, err := newestLTS(strings.NewReader(bad)); err == nil {
+			t.Errorf("%s: got %q, want an error", name, got)
 		}
 	}
 }
@@ -56,22 +63,36 @@ func TestReleaseAssetsPerPlatform(t *testing.T) {
 	for _, c := range []struct {
 		goos, goarch string
 		musl         bool
-		ytdlp, deno  string
+		ytdlp, node  string
 	}{
-		{"windows", "amd64", false, "yt-dlp.exe", "deno-x86_64-pc-windows-msvc.zip"},
-		{"windows", "arm64", false, "yt-dlp_arm64.exe", "deno-aarch64-pc-windows-msvc.zip"},
-		{"darwin", "arm64", false, "yt-dlp_macos", "deno-aarch64-apple-darwin.zip"},
-		{"darwin", "amd64", false, "yt-dlp_macos", "deno-x86_64-apple-darwin.zip"},
-		{"linux", "amd64", false, "yt-dlp_linux", "deno-x86_64-unknown-linux-gnu.zip"},
-		{"linux", "arm64", false, "yt-dlp_linux_aarch64", "deno-aarch64-unknown-linux-gnu.zip"},
-		{"linux", "amd64", true, "yt-dlp_musllinux", "deno-x86_64-unknown-linux-gnu.zip"},
+		{"windows", "amd64", false, "yt-dlp.exe", "win-x64"},
+		{"windows", "arm64", false, "yt-dlp_arm64.exe", "win-arm64"},
+		{"windows", "386", false, "yt-dlp_x86.exe", ""},
+		{"darwin", "arm64", false, "yt-dlp_macos", "darwin-arm64"},
+		{"darwin", "amd64", false, "yt-dlp_macos", "darwin-x64"},
+		{"linux", "amd64", false, "yt-dlp_linux", "linux-x64"},
+		{"linux", "arm64", false, "yt-dlp_linux_aarch64", "linux-arm64"},
+		{"linux", "amd64", true, "yt-dlp_musllinux", "linux-x64"}, // InstallNode refuses musl
 		{"freebsd", "amd64", false, "", ""},
 	} {
 		if got, _ := ytdlpAsset(c.goos, c.goarch, c.musl); got != c.ytdlp {
 			t.Errorf("yt-dlp for %s/%s musl=%v: got %q, want %q", c.goos, c.goarch, c.musl, got, c.ytdlp)
 		}
-		if got, _ := denoAsset(c.goos, c.goarch); got != c.deno {
-			t.Errorf("deno for %s/%s: got %q, want %q", c.goos, c.goarch, got, c.deno)
+		if got, _ := nodePlatform(c.goos, c.goarch); got != c.node {
+			t.Errorf("node for %s/%s: got %q, want %q", c.goos, c.goarch, got, c.node)
+		}
+	}
+}
+
+func TestNodeArchiveNames(t *testing.T) {
+	// As listed in https://nodejs.org/dist/v24.21.0/SHASUMS256.txt.
+	for _, c := range []struct{ platform, archive, program string }{
+		{"win-x64", "node-v24.21.0-win-x64.zip", "node-v24.21.0-win-x64/node.exe"},
+		{"darwin-arm64", "node-v24.21.0-darwin-arm64.tar.gz", "node-v24.21.0-darwin-arm64/bin/node"},
+		{"linux-x64", "node-v24.21.0-linux-x64.tar.gz", "node-v24.21.0-linux-x64/bin/node"},
+	} {
+		if archive, program := nodeArchive("v24.21.0", c.platform); archive != c.archive || program != c.program {
+			t.Errorf("%s: got %q and %q", c.platform, archive, program)
 		}
 	}
 }
@@ -117,32 +138,69 @@ func TestCommandLineQuotesArguments(t *testing.T) {
 	}
 }
 
-func TestExtractFindsTheProgram(t *testing.T) {
+func TestUnzipFindsTheProgram(t *testing.T) {
 	dir := t.TempDir()
-	archive := filepath.Join(dir, "deno.zip")
+	archive := filepath.Join(dir, "node.zip")
 	f, _ := os.Create(archive)
 	w := zip.NewWriter(f)
-	for name, body := range map[string]string{"README.md": "readme", "deno": "the program"} {
+	for name, body := range map[string]string{
+		"node-v1/README.md": "readme", "node-v1/node_modules/x/node.exe": "not this one",
+		"node-v1/node.exe": "the program",
+	} {
 		entry, _ := w.Create(name)
 		entry.Write([]byte(body))
 	}
 	w.Close()
 	f.Close()
 
-	out, err := extract(archive, "deno", dir)
+	out, err := unzip(archive, "node-v1/node.exe", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(out); string(got) != "the program" {
 		t.Errorf("extracted %q", got)
 	}
-	if _, err := extract(archive, "deno.exe", dir); err == nil {
+	if _, err := unzip(archive, "node-v1/bin/node.exe", dir); err == nil {
 		t.Error("missing entry wasn't reported")
 	}
 }
 
+func TestUntarGzFindsTheProgram(t *testing.T) {
+	dir := t.TempDir()
+	archive := filepath.Join(dir, "node.tar.gz")
+	f, _ := os.Create(archive)
+	gz := gzip.NewWriter(f)
+	w := tar.NewWriter(gz)
+	add := func(hdr *tar.Header, body string) {
+		hdr.Mode, hdr.Size = 0o755, int64(len(body))
+		w.WriteHeader(hdr)
+		w.Write([]byte(body))
+	}
+	add(&tar.Header{Name: "node-v1/bin/", Typeflag: tar.TypeDir}, "")
+	add(&tar.Header{Name: "node-v1/bin/npm", Typeflag: tar.TypeSymlink, Linkname: "../lib/npm-cli.js"}, "")
+	add(&tar.Header{Name: "node-v1/lib/bin/node", Typeflag: tar.TypeReg}, "not this one")
+	add(&tar.Header{Name: "node-v1/bin/node", Typeflag: tar.TypeReg}, "the program")
+	add(&tar.Header{Name: "node-v1/bin/link", Typeflag: tar.TypeSymlink, Linkname: "node"}, "")
+	w.Close()
+	gz.Close()
+	f.Close()
+
+	out, err := untarGz(archive, "node-v1/bin/node", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(out); string(got) != "the program" {
+		t.Errorf("extracted %q", got)
+	}
+	for _, name := range []string{"node-v1/bin/npm", "node-v1/bin/link", "node-v1/bin/node.exe"} {
+		if _, err := untarGz(archive, name, dir); err == nil {
+			t.Errorf("%s: a link or missing entry wasn't refused", name)
+		}
+	}
+}
+
 func TestJSRuntimeVersionRules(t *testing.T) {
-	node, deno := jsRuntimes[0], jsRuntimes[1]
+	node := jsRuntimes[0]
 	for _, c := range []struct {
 		rt     jsRuntime
 		output string
@@ -151,8 +209,6 @@ func TestJSRuntimeVersionRules(t *testing.T) {
 		{node, "v24.17.0\n", "node 24.17"},
 		{node, "v22.0.0\n", "node 22.0"},
 		{node, "v20.11.1\n", ""}, // older than yt-dlp's minimum
-		{deno, "deno 2.9.6 (stable, release, x86_64-pc-windows-msvc)\n", "deno 2.9"},
-		{deno, "deno 2.2.0\n", ""},
 		{node, "not a version", ""},
 	} {
 		if got, _ := c.rt.check(c.output); got != c.want {

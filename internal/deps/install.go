@@ -1,10 +1,14 @@
 package deps
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +22,7 @@ import (
 
 const (
 	ytdlpRelease = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
-	denoRelease  = "https://github.com/denoland/deno/releases/latest/download/"
+	nodeDist     = "https://nodejs.org/dist/"
 )
 
 // ytdlpAsset is the standalone yt-dlp release file for an OS and architecture.
@@ -46,20 +50,28 @@ func ytdlpAsset(goos, goarch string, musl bool) (string, bool) {
 	return "", false
 }
 
-// denoAsset is the Deno release zip for an OS and architecture. Deno builds
-// Linux for glibc only.
-func denoAsset(goos, goarch string) (string, bool) {
-	arch, ok := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
+// nodePlatform is Node.js's name for an OS and architecture, as its release
+// files use it. On Linux it's the glibc build.
+func nodePlatform(goos, goarch string) (string, bool) {
+	arch, ok := map[string]string{"amd64": "x64", "arm64": "arm64"}[goarch]
 	if !ok {
 		return "", false
 	}
-	target, ok := map[string]string{
-		"windows": "pc-windows-msvc", "darwin": "apple-darwin", "linux": "unknown-linux-gnu",
-	}[goos]
+	system, ok := map[string]string{"windows": "win", "darwin": "darwin", "linux": "linux"}[goos]
 	if !ok {
 		return "", false
 	}
-	return "deno-" + arch + "-" + target + ".zip", true
+	return system + "-" + arch, true
+}
+
+// nodeArchive is the release file of a Node.js version for a platform, and the
+// path of the node program inside it.
+func nodeArchive(version, platform string) (archive, program string) {
+	dir := "node-" + version + "-" + platform
+	if strings.HasPrefix(platform, "win-") {
+		return dir + ".zip", dir + "/node.exe"
+	}
+	return dir + ".tar.gz", dir + "/bin/node"
 }
 
 // InstallYtdlp downloads the official yt-dlp build for this OS to dest,
@@ -82,23 +94,35 @@ func InstallYtdlp(ctx context.Context, dest string, progress func(done, total in
 	return install(tmp, dest)
 }
 
-// InstallDeno downloads the official Deno build for this OS, checks it
-// against its published SHA-256 sum, and unpacks it to dest.
-func InstallDeno(ctx context.Context, dest string, progress func(done, total int64)) error {
-	asset, ok := denoAsset(runtime.GOOS, runtime.GOARCH)
+// InstallNode downloads the official build of the newest Node.js LTS for this
+// OS, checks it against the release's published SHA-256 sums, and unpacks
+// node to dest.
+func InstallNode(ctx context.Context, dest string, progress func(done, total int64)) error {
+	platform, ok := nodePlatform(runtime.GOOS, runtime.GOARCH)
 	if !ok || isMusl() {
-		return fmt.Errorf("Deno has no build for %s/%s", runtime.GOOS, runtime.GOARCH)
+		return fmt.Errorf("Node.js has no build for %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	want, err := fetchSum(ctx, denoRelease+asset+".sha256sum", asset, denoSum)
+	version, err := nodeLTS(ctx)
 	if err != nil {
 		return err
 	}
-	archive, err := downloadVerified(ctx, denoRelease+asset, filepath.Dir(dest), want, progress)
+	asset, program := nodeArchive(version, platform)
+	release := nodeDist + version + "/"
+	want, err := fetchSum(ctx, release+"SHASUMS256.txt", asset,
+		func(sums string) string { return expectedSum(sums, asset) })
+	if err != nil {
+		return err
+	}
+	archive, err := downloadVerified(ctx, release+asset, filepath.Dir(dest), want, progress)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(archive)
-	tmp, err := extract(archive, filepath.Base(dest), filepath.Dir(dest))
+	unpack := untarGz
+	if strings.HasSuffix(asset, ".zip") {
+		unpack = unzip
+	}
+	tmp, err := unpack(archive, program, filepath.Dir(dest))
 	if err != nil {
 		return err
 	}
@@ -132,18 +156,47 @@ func fetchSum(ctx context.Context, url, name string, parse func(string) string) 
 	return want, nil
 }
 
-var sha256Hex = regexp.MustCompile(`(?i)\b[0-9a-f]{64}\b`)
-
-// denoSum reads the hash out of one of Deno's per-file .sha256sum files. They
-// hold "<hash>  <name>" for macOS and Linux, but PowerShell Get-FileHash
-// output ("Hash : <HEX>" and a "Path : ..." line) for Windows. Anything but
-// exactly one hash is refused rather than guessed at.
-func denoSum(text string) string {
-	hashes := sha256Hex.FindAllString(text, -1)
-	if len(hashes) != 1 {
-		return ""
+// nodeLTS asks nodejs.org for the newest LTS version of Node.js, e.g. "v24.21.0".
+func nodeLTS(ctx context.Context) (string, error) {
+	resp, err := httpGet(ctx, nodeDist+"index.json")
+	if err != nil {
+		return "", err
 	}
-	return strings.ToLower(hashes[0])
+	defer resp.Body.Close()
+	return newestLTS(io.LimitReader(resp.Body, 16<<20))
+}
+
+var nodeVersion = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
+
+// newestLTS reads Node.js's release list, which is newest first, only as far
+// as the first LTS release.
+func newestLTS(index io.Reader) (string, error) {
+	bad := func(err error) (string, error) {
+		return "", fmt.Errorf("couldn't read Node.js's release list: %w", err)
+	}
+	dec := json.NewDecoder(index)
+	if tok, err := dec.Token(); err != nil {
+		return bad(err)
+	} else if tok != json.Delim('[') {
+		return bad(errors.New("it isn't a list"))
+	}
+	for dec.More() {
+		var release struct {
+			Version string `json:"version"`
+			LTS     any    `json:"lts"` // false, or the LTS line's name
+		}
+		if err := dec.Decode(&release); err != nil {
+			return bad(err)
+		}
+		if _, ok := release.LTS.(string); !ok {
+			continue
+		}
+		if !nodeVersion.MatchString(release.Version) {
+			return bad(fmt.Errorf("odd version %q", release.Version))
+		}
+		return release.Version, nil
+	}
+	return "", errors.New("Node.js's release list has no LTS release")
 }
 
 // expectedSum finds name in sha256sum-style lines ("<hash>  <name>").
@@ -195,16 +248,16 @@ func downloadVerified(ctx context.Context, url, dir, want string, progress func(
 	return f.Name(), nil
 }
 
-// extract copies the file called name out of a zip archive into a temporary
-// file in dir and returns its path.
-func extract(archive, name, dir string) (string, error) {
+// unzip copies the file at path name in a zip archive into a temporary file
+// in dir and returns its path.
+func unzip(archive, name, dir string) (string, error) {
 	r, err := zip.OpenReader(archive)
 	if err != nil {
 		return "", err
 	}
 	defer r.Close()
 	for _, entry := range r.File {
-		if path.Base(entry.Name) != name || entry.FileInfo().IsDir() {
+		if entry.Name != name || entry.FileInfo().IsDir() {
 			continue
 		}
 		src, err := entry.Open()
@@ -212,21 +265,53 @@ func extract(archive, name, dir string) (string, error) {
 			return "", err
 		}
 		defer src.Close()
-		out, err := os.CreateTemp(dir, "extract-*.part")
-		if err != nil {
-			return "", err
-		}
-		_, err = io.Copy(out, src)
-		if closeErr := out.Close(); err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			os.Remove(out.Name())
-			return "", err
-		}
-		return out.Name(), nil
+		return saveTemp(src, dir)
 	}
-	return "", fmt.Errorf("%s isn't in %s", name, filepath.Base(archive))
+	return "", fmt.Errorf("%s isn't in the archive", name)
+}
+
+// untarGz does the same for a .tar.gz archive. Only a regular file counts, not
+// a link.
+func untarGz(archive, name, dir string) (string, error) {
+	f, err := os.Open(archive)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", err
+	}
+	r := tar.NewReader(gz)
+	for {
+		entry, err := r.Next()
+		if err == io.EOF {
+			return "", fmt.Errorf("%s isn't in the archive", name)
+		}
+		if err != nil {
+			return "", err
+		}
+		if entry.Name == name && entry.Typeflag == tar.TypeReg {
+			return saveTemp(r, dir)
+		}
+	}
+}
+
+// saveTemp copies src into a temporary file in dir and returns its path.
+func saveTemp(src io.Reader, dir string) (string, error) {
+	out, err := os.CreateTemp(dir, "extract-*.part")
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(out, src)
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		os.Remove(out.Name())
+		return "", err
+	}
+	return out.Name(), nil
 }
 
 func httpGet(ctx context.Context, url string) (*http.Response, error) {

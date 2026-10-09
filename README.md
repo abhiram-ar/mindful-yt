@@ -65,7 +65,7 @@ mindful-yt @jawed                           # a channel's newest videos, then pi
 
 Or run `mindful-yt` on its own and type any of these.
 
-> mindful-yt offers to install yt-dlp, Deno and ffmpeg if they're missing.
+> mindful-yt offers to install yt-dlp, Node.js and ffmpeg if they're missing.
 
 <br/>
 

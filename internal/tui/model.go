@@ -39,7 +39,7 @@ type App struct {
 	Store    store.Store
 	Config   store.Config
 	Entries  []store.Entry
-	Tools    string // mindful-yt's tools folder: its own yt-dlp, and Deno if it installed one
+	Tools    string // mindful-yt's tools folder: its own yt-dlp, and Node.js if it installed one
 	ProxyURL string // the private proxy yt-dlp goes through
 }
 
@@ -65,7 +65,7 @@ const (
 	stageSaved                    // already saved: play a copy or get another resolution
 	stageBusy                     // spinner while checking tools or looking the video up
 	stageDeps                     // tools are missing: offer to install them
-	stageInstalling               // mindful-yt downloading yt-dlp or Deno
+	stageInstalling               // mindful-yt downloading yt-dlp or Node.js
 	stagePick                     // choose a resolution
 	stageReason                   // say why you're watching
 	stageDownloading              // progress bars
@@ -130,7 +130,7 @@ type model struct {
 	missing           []deps.Dependency
 	queue             []deps.Dependency
 	triedInstall      bool
-	installing        string // what mindful-yt is downloading
+	installing        deps.Dependency // what mindful-yt is downloading
 	installed, needed int64
 
 	info       ytdlp.VideoInfo

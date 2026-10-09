@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/abhiram-ar/mindful-yt/internal/deps"
 	"github.com/abhiram-ar/mindful-yt/internal/store"
 	"github.com/abhiram-ar/mindful-yt/internal/ytdlp"
 )
@@ -212,6 +213,25 @@ func TestHelpLineListsEachScreensKeys(t *testing.T) {
 		if w := ansi.StringWidth(strings.TrimSuffix(help, "\n")); w > 29 || !strings.HasPrefix(help, c.want[:3]) {
 			t.Errorf("stage %v: help line %q is %d columns in a 30-column terminal", c.stage, help, w)
 		}
+	}
+}
+
+func TestInstallScreensNameEachToolsSource(t *testing.T) {
+	m := newModel(testApp(t, store.DefaultConfig, nil), Options{})
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
+	download := func(context.Context, func(done, total int64)) error { return nil }
+	ytdlpDep := deps.Dependency{Name: "yt-dlp", From: "GitHub", Download: download}
+	nodeDep := deps.Dependency{Name: "Node.js", From: "nodejs.org", Download: download}
+	m.stage, m.missing = stageDeps, []deps.Dependency{ytdlpDep, nodeDep}
+	view := ansi.Strip(m.View().Content)
+	for _, want := range []string{"official build from GitHub", "official build from nodejs.org"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("no %q in\n%s", want, view)
+		}
+	}
+	m.stage, m.installing = stageInstalling, nodeDep
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Downloading Node.js from nodejs.org") {
+		t.Errorf("installing screen:\n%s", view)
 	}
 }
 
